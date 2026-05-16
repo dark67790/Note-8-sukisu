@@ -140,3 +140,6 @@ else:
 fix_all('__nocfi ', '', '__nocfi stripped')
 
 print("\n✅ All SukiSU 4.4 compat fixes applied")
+
+# Fix 16: strncpy_from_user_nofault → strncpy_from_user (added in 5.8)
+fix_all('strncpy_from_user_nofault', 'strncpy_from_user', 'strncpy_from_user_nofault → strncpy_from_user')
