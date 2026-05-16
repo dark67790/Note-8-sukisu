@@ -32,6 +32,12 @@ jobs:
         git clone --depth=1 https://github.com/ace2nutzer/Samsung_dreamlte_Kernel \
           kernel_source
 
+    # ── 3.5 Fix Toolchain Permissions ──────────────────────────────────────────
+    - name: Fix Toolchain Permissions
+      run: |
+        chmod +x kernel_source/toolchain/gcc-cfp/gcc-cfp-jopp-only/aarch64-linux-android-4.9/bin/*
+        echo "✅ Toolchain permissions fixed"
+
     # ── 4. Environment Variables ───────────────────────────────────────────────
     - name: Set Environment Variables
       run: |
