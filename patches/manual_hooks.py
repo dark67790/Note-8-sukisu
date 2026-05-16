@@ -96,15 +96,14 @@ fix('fs/stat.c',
     'stat.c: hook')
 
 # ── drivers/input/input.c ──────────────────────────────────────────────────
+# FIXED: anchor reduced to the unique first line to avoid whitespace mismatch
 fix('drivers/input/input.c',
-    'static void input_handle_event(struct input_dev *dev,\n'
-    '                               unsigned int type, unsigned int code, int value)\n{',
+    'static void input_handle_event(struct input_dev *dev,',
     '#ifdef CONFIG_KSU\n'
     'extern bool ksu_input_hook __read_mostly;\n'
     'extern int ksu_handle_input_handle_event(unsigned int *type, unsigned int *code, int *value);\n'
     '#endif\n'
-    'static void input_handle_event(struct input_dev *dev,\n'
-    '                               unsigned int type, unsigned int code, int value)\n{',
+    'static void input_handle_event(struct input_dev *dev,',
     'input.c: externs')
 
 fix('drivers/input/input.c',
