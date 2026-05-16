@@ -81,6 +81,11 @@ jobs:
         grep "depends on" drivers/kernelsu/Kconfig | head -3
         echo "✅ KPROBES dependency removed"
 
+    # ── 6.5 Apply SukiSU 4.4 Compat Fixes ──────────────────────────────────────
+    - name: Apply SukiSU 4.4 Compat Fixes
+      working-directory: kernel_source
+      run: python3 ${{ env.PATCHES }}/sukisu_compat_fix.py
+
     # ── 7. Kernel Config ───────────────────────────────────────────────────────
     - name: Set Kernel Config
       working-directory: kernel_source
