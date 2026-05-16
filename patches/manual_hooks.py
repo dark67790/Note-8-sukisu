@@ -97,17 +97,19 @@ fix('fs/stat.c',
 
 # ── drivers/input/input.c ──────────────────────────────────────────────────
 fix('drivers/input/input.c',
-    'static void input_handle_event(struct input_dev *dev,',
+    'static void input_handle_event(struct input_dev *dev,\n'
+    '                               unsigned int type, unsigned int code, int value)\n{',
     '#ifdef CONFIG_KSU\n'
     'extern bool ksu_input_hook __read_mostly;\n'
     'extern int ksu_handle_input_handle_event(unsigned int *type, unsigned int *code, int *value);\n'
     '#endif\n'
-    'static void input_handle_event(struct input_dev *dev,',
+    'static void input_handle_event(struct input_dev *dev,\n'
+    '                               unsigned int type, unsigned int code, int value)\n{',
     'input.c: externs')
 
 fix('drivers/input/input.c',
-    '\tint disposition = input_get_disposition(dev, type, code, &value);\n',
-    '\tint disposition = input_get_disposition(dev, type, code, &value);\n\n'
+    '\tdisposition = input_get_disposition(dev, type, code, &value);\n',
+    '\tdisposition = input_get_disposition(dev, type, code, &value);\n\n'
     '#ifdef CONFIG_KSU\n'
     '\tif (unlikely(ksu_input_hook))\n'
     '\t\tksu_handle_input_handle_event(&type, &code, &value);\n'
