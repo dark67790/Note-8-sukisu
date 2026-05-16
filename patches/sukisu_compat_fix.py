@@ -37,4 +37,10 @@ fix('drivers/kernelsu/hook/syscall_hook.h',
 # Fix 2: MODULE_IMPORT_NS doesn't exist before 5.4 — drop it completely
 fix_module_import_ns('drivers/kernelsu/core/init.c')
 
+# Fix 3: compiler_types.h doesn't exist before 4.20 — use compiler.h instead
+fix('drivers/kernelsu/feature/sulog.c',
+    '#include <linux/compiler_types.h>',
+    '#include <linux/compiler.h>',
+    'sulog.c: compiler_types.h → compiler.h')
+
 print("\n✅ All SukiSU 4.4 fixes applied")
