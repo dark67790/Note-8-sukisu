@@ -1,3 +1,4 @@
+
 name: Build Note8 Kernel (SukiSU-Ultra)
 
 permissions:
@@ -20,11 +21,13 @@ jobs:
     # ── 2. Dependencies ────────────────────────────────────────────────────────
     - name: Install Dependencies
       run: |
+        sudo dpkg --add-architecture i386
         sudo apt-get update -qq
         sudo apt-get install -y -qq \
           bc bison flex libssl-dev libelf-dev \
           python3 git patch coreutils curl \
-          build-essential cpio wget zip
+          build-essential cpio wget zip \
+          libc6-i386 lib32stdc++6 lib32z1
 
     # ── 3. Clone Kernel Source ─────────────────────────────────────────────────
     - name: Clone Kernel Source
