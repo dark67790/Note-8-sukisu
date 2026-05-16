@@ -2,6 +2,7 @@
 # sukisu_compat_fix.py — SukiSU 4.4 ARM64 compatibility fixes
 # Run from kernel_source/
 
+import glob
 import re
 
 def fix(path, old, new, label):
@@ -37,10 +38,17 @@ fix('drivers/kernelsu/hook/syscall_hook.h',
 # Fix 2: MODULE_IMPORT_NS doesn't exist before 5.4 — drop it completely
 fix_module_import_ns('drivers/kernelsu/core/init.c')
 
-# Fix 3: compiler_types.h doesn't exist before 4.20 — use compiler.h instead
-fix('drivers/kernelsu/feature/sulog.c',
-    '#include <linux/compiler_types.h>',
-    '#include <linux/compiler.h>',
-    'sulog.c: compiler_types.h → compiler.h')
+# Fix 3: compiler_types.h doesn't exist before 4.20 — fix all files in driver
+for path in glob.glob('drivers/kernelsu/**/*', recursive=True):
+    try:
+        with open(path, 'r') as f:
+            s = f.read()
+        if '#include <linux/compiler_types.h>' not in s:
+            continue
+        with open(path, 'w') as f:
+            f.write(s.replace('#include <linux/compiler_types.h>', '#include <linux/compiler.h>'))
+        print(f"✅ compiler_types.h fix: {path}")
+    except (IsADirectoryError, UnicodeDecodeError):
+        continue
 
 print("\n✅ All SukiSU 4.4 fixes applied")
