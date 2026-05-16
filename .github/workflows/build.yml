@@ -122,6 +122,7 @@ jobs:
         export ARCH=arm64
         export CROSS_COMPILE=${{ env.CROSS_COMPILE }}
 
+        chmod +x scripts/kconfig/merge_config.sh
         ARCH=arm64 scripts/kconfig/merge_config.sh \
           arch/arm64/configs/g950x_defconfig \
           arch/arm64/configs/n950x_defconfig
@@ -131,7 +132,6 @@ jobs:
           || echo "⚠️  CONFIG_KSU not in final config"
 
         make -j$(nproc) ARCH=arm64 CROSS_COMPILE=$CROSS_COMPILE 2>&1 | tee build.log || true
-
     # ── 9. Grab Image ──────────────────────────────────────────────────────────
     - name: Grab Kernel Image
       if: always()
