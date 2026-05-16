@@ -51,7 +51,7 @@ jobs:
 
         # Verify integration landed
         FAIL=0
-        grep -q "CONFIG_KSU"  drivers/kernelsu/Kconfig  && echo "✅ Kconfig has KSU"   || { echo "❌ Kconfig missing KSU";  FAIL=1; }
+        grep -q "config KSU\|KSU_SUSFS" drivers/kernelsu/Kconfig && echo "✅ Kconfig has KSU" || { echo "❌ Kconfig missing KSU"; FAIL=1; }
         grep -q "kernelsu"    drivers/Makefile           && echo "✅ Makefile wired"    || { echo "❌ Makefile not wired";   FAIL=1; }
         grep -q "kernelsu"    drivers/Kconfig            && echo "✅ Kconfig sourced"   || { echo "❌ Kconfig not sourced";  FAIL=1; }
         [ -d drivers/kernelsu ] && echo "✅ driver dir exists" || { echo "❌ driver dir missing"; FAIL=1; }
