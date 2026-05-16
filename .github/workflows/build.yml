@@ -1,4 +1,4 @@
-name: Build Fold4 Kernel (KSU-Next + SUSFS) — Personal
+name: Build Note8 Kernel (SukiSU-Ultra)
 
 permissions:
   contents: write
@@ -9,7 +9,7 @@ on:
 
 jobs:
   build:
-    name: SM-F936B · KSU-Next · SUSFS v2.1.0 · Droidspaces
+    name: SM-N950F · SukiSU-Ultra · Note 8
     runs-on: ubuntu-latest
 
     steps:
@@ -17,218 +17,65 @@ jobs:
     - name: Checkout
       uses: actions/checkout@v4
 
-    # ── 2. Free disk space ─────────────────────────────────────────────────────
-    - name: Free Disk Space
-      uses: endersonmenezes/free-disk-space@v3
-      with:
-        remove_android: true
-        remove_dotnet: true
-        remove_haskell: true
-        remove_tool_cache: true
-        remove_swap: true
-        remove_packages: >
-          azure-cli google-cloud-cli microsoft-edge-stable google-chrome-stable
-          firefox postgresql* temurin-* *llvm* mysql* dotnet-sdk-*
-        remove_packages_one_command: true
-        remove_folders: >
-          /usr/share/swift /usr/share/miniconda /usr/share/az*
-          /usr/local/lib/node_modules /usr/local/share/chromium
-          /usr/local/share/powershell /usr/local/julia
-          /usr/local/aws-cli /usr/local/aws-sam-cli /usr/share/gradle
-        rm_cmd: rmz
-        rmz_version: "3.1.1"
-        testing: false
-
-    # ── 3. Swap ────────────────────────────────────────────────────────────────
-    - name: Setup Swap
-      uses: thejerrybao/setup-swap-space@v1
-      with:
-        swap-size-gb: 12
-
-    # ── 4. Dependencies ────────────────────────────────────────────────────────
+    # ── 2. Dependencies ────────────────────────────────────────────────────────
     - name: Install Dependencies
       run: |
         sudo apt-get update -qq
         sudo apt-get install -y -qq \
           bc bison flex libssl-dev libelf-dev \
-          python3-pip unzip git patch coreutils curl \
+          python3 git patch coreutils curl \
           build-essential cpio wget zip
 
-    # ── 5. Samsung source + toolchain ──────────────────────────────────────────
-    - name: Download and Extract Samsung Source
+    # ── 3. Clone Kernel Source ─────────────────────────────────────────────────
+    - name: Clone Kernel Source
       run: |
-        pip install -q gdown
-        gdown "1oIrEQQJuHD8fOWQGEmvFLf1sVCmaZg2-" -O samsung.zip
-        gdown "1z4U2GRukJ5xNRyvKaYj7XLkzdWbG0qnX" -O toolchain.tar.gz
-        unzip -q samsung.zip
-        tar -xf Kernel.tar.gz
-        tar -xf Platform.tar.gz
-        rm samsung.zip Kernel.tar.gz Platform.tar.gz
-        tar -xzf toolchain.tar.gz -C kernel_platform/
-        rm toolchain.tar.gz
+        git clone --depth=1 https://github.com/ace2nutzer/Samsung_dreamlte_Kernel \
+          kernel_source
 
-    # ── 6. Patch build target ──────────────────────────────────────────────────
-    - name: Patch Build Target
-      run: |
-        sed -i 's/BUILD_TARGET=q4q_kor_singlex/BUILD_TARGET=q4q_eur_openx/g' \
-          build_kernel_GKI.sh
-
-    # ── 7. Environment variables ───────────────────────────────────────────────
+    # ── 4. Environment Variables ───────────────────────────────────────────────
     - name: Set Environment Variables
       run: |
-        echo "COMMON=$GITHUB_WORKSPACE/kernel_platform/common" >> $GITHUB_ENV
-        echo "GKI_DEFCONFIG=$GITHUB_WORKSPACE/kernel_platform/common/arch/arm64/configs/gki_defconfig" >> $GITHUB_ENV
-        echo "PATCHES=$GITHUB_WORKSPACE/patches" >> $GITHUB_ENV
+        KROOT=$GITHUB_WORKSPACE/kernel_source
+        TC=$KROOT/toolchain/gcc-cfp/gcc-cfp-jopp-only/aarch64-linux-android-4.9/bin
+        echo "KROOT=$KROOT"                                   >> $GITHUB_ENV
+        echo "CROSS_COMPILE=$TC/aarch64-linux-android-"      >> $GITHUB_ENV
+        echo "PATCHES=$GITHUB_WORKSPACE/patches"             >> $GITHUB_ENV
 
-    # ── 8. SUSFS kernel patches ────────────────────────────────────────────────
-    - name: Setup SUSFS Kernel Patches
-      working-directory: kernel_platform/common
+    # ── 5. Setup SukiSU-Ultra ──────────────────────────────────────────────────
+    - name: Setup SukiSU-Ultra
+      working-directory: kernel_source
       run: |
-        cp $PATCHES/susfs/fs/susfs.c fs/
-        cp $PATCHES/susfs/include/susfs.h include/linux/susfs.h
-        cp $PATCHES/susfs/include/susfs_def.h include/linux/susfs_def.h
+        curl -LSs \
+          "https://raw.githubusercontent.com/SukiSU-Ultra/SukiSU-Ultra/main/kernel/setup.sh" \
+          | bash -s main || true
 
-        sed -i '/#ifdef CONFIG_SECURITY_DEFEX/,/^#endif/d' fs/open.c
-
-        sed -i '/copy_flags = CL_COPY_UNBINDABLE | CL_EXPIRE;/,/#endif/ {
-          /#ifdef CONFIG_KDP_NS/,/#endif/ {
-             /#else/,/#endif/!d
-             /#else/d
-             /#endif/d
-          }
-        }' fs/namespace.c
-
-        patch -p1 < $PATCHES/susfs/50_add_susfs_in_gki-android12-5.10.patch || true
-        patch -p1 < $PATCHES/susfs/base.c.patch || true
-
-        python3 $PATCHES/susfs_hunk_fix.py
-
-        find . -name "*.rej" -delete
-        find . -name "*.orig" -delete
-
-    # ── 9. Verify SUSFS kernel patches ─────────────────────────────────────────
-    - name: Verify SUSFS Kernel Patches
-      working-directory: kernel_platform/common
-      run: |
+        # Verify integration landed
         FAIL=0
-        check() {
-          local label="$1" file="$2" pattern="$3"
-          grep -q "$pattern" "$file" 2>/dev/null \
-            && echo "✅ $label" \
-            || { echo "❌ $label — '$pattern' not found in $file"; FAIL=1; }
-        }
+        grep -q "CONFIG_KSU"  drivers/kernelsu/Kconfig  && echo "✅ Kconfig has KSU"   || { echo "❌ Kconfig missing KSU";  FAIL=1; }
+        grep -q "kernelsu"    drivers/Makefile           && echo "✅ Makefile wired"    || { echo "❌ Makefile not wired";   FAIL=1; }
+        grep -q "kernelsu"    drivers/Kconfig            && echo "✅ Kconfig sourced"   || { echo "❌ Kconfig not sourced";  FAIL=1; }
+        [ -d drivers/kernelsu ] && echo "✅ driver dir exists" || { echo "❌ driver dir missing"; FAIL=1; }
+        [ "$FAIL" -ne 0 ] && { echo "❌ SukiSU setup failed"; exit 1; }
 
-        check "susfs.c exists"             fs/susfs.c                   "susfs"
-        check "susfs.h exists"             include/linux/susfs.h        "susfs"
-        check "susfs_def.h exists"         include/linux/susfs_def.h    "susfs"
-        check "fs/Makefile compiles susfs" fs/Makefile                  "susfs.o"
-        check "exec.c patched"             fs/exec.c                    "susfs_def.h"
-        check "namespace.c SUS_MOUNT"      fs/namespace.c               "CONFIG_KSU_SUSFS_SUS_MOUNT"
-        check "namespace.c externs"        fs/namespace.c               "susfs_is_current_ksu_domain"
-        check "namespace.c copy_flags"     fs/namespace.c               "CL_COPY_MNT_NS"
-        check "open.c patched"             fs/open.c                    "is_inode_open_redirect"
-        check "proc/base.c include"        fs/proc/base.c               "susfs_def.h"
-        check "proc/base.c SUS_MAP"        fs/proc/base.c               "AS_FLAGS_SUS_MAP"
-        check "proc/base.c vma declared"   fs/proc/base.c               "struct vm_area_struct \*vma"
-        check "fdinfo.c patched"           fs/notify/fdinfo.c           "DEFAULT_KSU_MNT_ID"
-        check "hooks.c ksu_selinux ref"    security/selinux/hooks.c     "ksu_selinux_hide_running"
-
-        REJS=$(find . -name "*.rej" 2>/dev/null)
-        [ -n "$REJS" ] && { echo "❌ Leftover .rej files: $REJS"; FAIL=1; } \
-                       || echo "✅ No leftover .rej files"
-
-        [ "$FAIL" -ne 0 ] && { echo "❌ SUSFS kernel patch checks failed — aborting"; exit 1; }
-        echo "✅ All SUSFS kernel patch checks passed"
-
-    # ── 10. KernelSU-Next + SUSFS driver patches ───────────────────────────────
-    - name: Setup KernelSU-Next with SUSFS
-      working-directory: kernel_platform/common
+    # ── 6. Fix Kconfig for non-GKI 4.4 ────────────────────────────────────────
+    - name: Patch Kconfig KPROBES dependency
+      working-directory: kernel_source
       run: |
-        chmod -R u+w .
-        curl -LSs "https://raw.githubusercontent.com/KernelSU-Next/KernelSU-Next/next/kernel/setup.sh" \
-          | bash -s dev
+        # 4.4 has no CONFIG_KPROBES — remove it from depends so CONFIG_KSU is selectable
+        sed -i 's/depends on KPROBES && EXT4_FS/depends on EXT4_FS/' \
+          drivers/kernelsu/Kconfig
+        grep "depends on" drivers/kernelsu/Kconfig | head -3
+        echo "✅ KPROBES dependency removed"
 
-        git -C KernelSU-Next fetch --unshallow 2>/dev/null || true
-        git -C KernelSU-Next checkout 551ad80473f60e052917aec08abf5323b6ab2f7c
-
-        cd KernelSU-Next
-        patch -p1 --batch < $PATCHES/ksu-next/10_enable_susfs_for_ksu.patch || true
-
-        for p in fix_Kbuild fix_Makefile fix_init.c fix_kernel_umount.c \
-                  fix_setuid_hook.c fix_sucompat.c fix_sucompat.h \
-                  fix_supercall.c ksu_toolkit overwrite_hook_mode; do
-          patch -p1 --batch < $PATCHES/ksu-next/${p}.patch || true
-        done
-
-        cd $GITHUB_WORKSPACE/kernel_platform/common/drivers/kernelsu
-        python3 $PATCHES/ksun_init_fix.py
-
-        find . -name "*.rej" -delete
-        find . -name "*.orig" -delete
-
-    # ── 11. Verify KSU-Next SUSFS integration ──────────────────────────────────
-    - name: Verify KernelSU-Next SUSFS Integration
-      working-directory: kernel_platform/common/drivers/kernelsu
-      run: |
-        FAIL=0
-        check() {
-          local label="$1" file="$2" pattern="$3"
-          grep -q "$pattern" "$file" 2>/dev/null \
-            && echo "✅ $label" \
-            || { echo "❌ $label — '$pattern' not found in $file"; FAIL=1; }
-        }
-
-        check "Kconfig has KSU_SUSFS"      Kconfig                      "KSU_SUSFS"
-        check "Kconfig has SUS_MOUNT"      Kconfig                      "KSU_SUSFS_SUS_MOUNT"
-        check "Kconfig has OPEN_REDIRECT"  Kconfig                      "KSU_SUSFS_OPEN_REDIRECT"
-        check "sucompat.c patched"         feature/sucompat.c           "susfs"
-        check "selinux hide defined"       selinux/selinux.c            "ksu_selinux_hide_running"
-        check "fake_state defined"         selinux/selinux.c            "fake_state"
-        check "static keys defined"        runtime/ksud_integration.c   "DEFINE_STATIC_KEY_TRUE"
-        check "su_compat_enabled defined"  feature/sucompat.c           "ksu_su_compat_enabled"
-        check "supercall syscalls.h"       supercall/supercall.c        "linux/syscalls.h"
-
-        REJS=$(find . -name "*.rej" 2>/dev/null)
-        [ -n "$REJS" ] && { echo "❌ Leftover .rej files:"; echo "$REJS"; FAIL=1; } \
-                       || echo "✅ No leftover .rej files"
-
-        grep -q "ksu_late_loaded" core/init.c 2>/dev/null \
-          && { echo "❌ init.c still has ksu_late_loaded"; FAIL=1; } \
-          || echo "✅ init.c clean"
-
-        [ "$FAIL" -ne 0 ] && { echo "❌ KSU-Next SUSFS checks failed — aborting"; exit 1; }
-        echo "✅ All KSU-Next SUSFS checks passed"
-
-    # ── 12. Kernel config ──────────────────────────────────────────────────────
+    # ── 7. Kernel Config ───────────────────────────────────────────────────────
     - name: Set Kernel Config
+      working-directory: kernel_source
       run: |
-        sed -i 's/check_defconfig//' kernel_platform/common/build.config.gki
-
-        cat >> "$GKI_DEFCONFIG" << 'EOF'
-        # Mountify support
-        CONFIG_OVERLAY_FS=y
-        CONFIG_TMPFS_XATTR=y
-        CONFIG_TMPFS_POSIX_ACL=y
-        # Kprobes
-        CONFIG_KPROBES=y
-        CONFIG_HAVE_KPROBES=y
-        CONFIG_KPROBE_EVENTS=y
-        # KernelSU-Next
+        cat >> arch/arm64/configs/n950x_defconfig << 'EOF'
+        # SukiSU-Ultra
         CONFIG_KSU=y
-        CONFIG_KSU_WITH_KPROBES=n
-        # SUSFS
-        CONFIG_KSU_SUSFS=y
-        CONFIG_KSU_SUSFS_SUS_PATH=y
-        CONFIG_KSU_SUSFS_SUS_MOUNT=y
-        CONFIG_KSU_SUSFS_SUS_KSTAT=y
-        CONFIG_KSU_SUSFS_SUS_MAP=y
-        CONFIG_KSU_SUSFS_TRY_UMOUNT=y
-        CONFIG_KSU_SUSFS_SPOOF_UNAME=y
-        CONFIG_KSU_SUSFS_ENABLE_LOG=y
-        CONFIG_KSU_SUSFS_OPEN_REDIRECT=y
-        CONFIG_KSU_SUSFS_HIDE_KSU_SUSFS_SYMBOLS=y
-        CONFIG_KSU_SUSFS_SPOOF_CMDLINE_OR_BOOTCONFIG=y
-        # Disable Samsung security enforcement
+        CONFIG_KALLSYMS_ALL=y
+        # Disable Samsung security — required for syscall table patching
         CONFIG_UH=n
         CONFIG_UH_RKP=n
         CONFIG_UH_LKMAUTH=n
@@ -242,170 +89,77 @@ jobs:
         CONFIG_KDP_NS=n
         CONFIG_KDP=n
         EOF
+        echo "✅ n950x_defconfig updated"
 
-    # ── 13. BBG ────────────────────────────────────────────────────────────────
-    - name: Add Baseband Guard
-      working-directory: kernel_platform/common
-      run: |
-        curl -LSs https://github.com/vc-teahouse/Baseband-guard/raw/main/setup.sh | bash
-
-        cat >> "$GKI_DEFCONFIG" << 'EOF'
-        # Baseband Guard
-        CONFIG_BBG=y
-        EOF
-
-        sed -i '/^config LSM$/,/^help$/{ /^[[:space:]]*default/ { /baseband_guard/! s/selinux/selinux,baseband_guard/ } }' \
-          security/Kconfig
-
-        sed -i '/^CONFIG_LSM=/ s/"$/,baseband_guard"/' "$GKI_DEFCONFIG"
-
-    # ── 14. Unicode fix ────────────────────────────────────────────────────────
-    - name: Apply Unicode Fix
-      working-directory: kernel_platform/common
-      run: |
-        patch -p1 < $PATCHES/unicode/unicode_bypass_fix_6.1-.patch || true
-        find . -name "*.rej" -delete
-        find . -name "*.orig" -delete
-
-    # ── 15. Droidspaces ────────────────────────────────────────────────────────
-    - name: Apply Droidspaces Support
-      working-directory: kernel_platform/common
-      run: |
-        patch -p1 < $PATCHES/droidspaces/fix_sysvipc_kabi_6_7_8.patch || true
-        patch -p1 < $PATCHES/droidspaces/fix_abi_padding_for_posix_mqueue.patch || true
-
-        cat >> "$GKI_DEFCONFIG" << 'EOF'
-        # Droidspaces — IPC
-        CONFIG_SYSVIPC=y
-        CONFIG_POSIX_MQUEUE=y
-        # Droidspaces — Namespaces
-        CONFIG_IPC_NS=y
-        CONFIG_PID_NS=y
-        # Droidspaces — HW access
-        CONFIG_DEVTMPFS=y
-        # Droidspaces — Docker NAT (optional)
-        CONFIG_NETFILTER_XT_MATCH_ADDRTYPE=y
-        # Droidspaces — UFW (optional)
-        CONFIG_NETFILTER_XT_TARGET_REJECT=y
-        CONFIG_NETFILTER_XT_TARGET_LOG=y
-        CONFIG_NETFILTER_XT_MATCH_RECENT=y
-        # Droidspaces — Fail2Ban (optional)
-        CONFIG_IP_SET=y
-        CONFIG_IP_SET_HASH_IP=y
-        CONFIG_IP_SET_HASH_NET=y
-        CONFIG_NETFILTER_XT_SET=y
-        EOF
-
-        find . -name "*.rej" -delete
-        find . -name "*.orig" -delete
-
-    # ── 16. ntsync ─────────────────────────────────────────────────────────────
-    - name: Apply ntsync Support
-      working-directory: kernel_platform/common
-      run: |
-        patch -p1 < $PATCHES/ntsync/ntsync_base.patch || true
-        patch -p1 < $PATCHES/ntsync/ntsync_compat_android12-5.10.patch || true
-        python3 $PATCHES/ntsync_lockdep_fix.py
-        find . -name "*.rej" -delete
-        find . -name "*.orig" -delete
-
-        cat >> "$GKI_DEFCONFIG" << 'EOF'
-        # ntsync
-        CONFIG_NTSYNC=y
-        EOF
-
-    # ── 17. BBRv1 ──────────────────────────────────────────────────────────────
-    - name: Add BBRv1
-      run: |
-        cat >> "$GKI_DEFCONFIG" << 'EOF'
-        # BBRv1 TCP Congestion Control
-        CONFIG_NET_SCH_FQ=y
-        CONFIG_TCP_CONG_ADVANCED=y
-        CONFIG_TCP_CONG_BBR=y
-        CONFIG_TCP_CONG_CUBIC=y
-        CONFIG_DEFAULT_BBR=y
-        # CONFIG_TCP_CONG_BIC is not set
-        # CONFIG_TCP_CONG_WESTWOOD is not set
-        # CONFIG_TCP_CONG_HTCP is not set
-        EOF
-
-    # ── 18. Build ──────────────────────────────────────────────────────────────
+    # ── 8. Build ───────────────────────────────────────────────────────────────
     - name: Build Kernel
+      working-directory: kernel_source
       run: |
-        mkdir -p out/vendor/qcom/opensource/mmrm-driver/
-        touch out/vendor/qcom/opensource/mmrm-driver/Module.symvers
-        mkdir -p out/target/product/q4q/
-        export LTO=full
-        export KBUILD_MODPOST_WARN=1
-        bash build_kernel_GKI.sh || true
+        export ARCH=arm64
+        export CROSS_COMPILE=${{ env.CROSS_COMPILE }}
 
-    # ── 19. Grab and upload Image (always runs) ────────────────────────────────
+        # Merge base + model defconfigs (mirrors what build.sh does)
+        ARCH=arm64 scripts/kconfig/merge_config.sh \
+          arch/arm64/configs/g950x_defconfig \
+          arch/arm64/configs/n950x_defconfig
+
+        # Verify KSU made it into .config
+        grep "CONFIG_KSU=y" .config \
+          && echo "✅ CONFIG_KSU=y in final config" \
+          || echo "⚠️  CONFIG_KSU not in final config"
+
+        make -j$(nproc) ARCH=arm64 CROSS_COMPILE=$CROSS_COMPILE 2>&1 | tee build.log || true
+
+    # ── 9. Grab Image ──────────────────────────────────────────────────────────
     - name: Grab Kernel Image
       if: always()
       id: package
       run: |
-        GKI_DIST="out/msm-waipio-waipio-gki/gki_kernel/dist"
-        IMAGE="$GKI_DIST/Image"
-        IMAGE_LZ4="$GKI_DIST/Image.lz4"
-
-        if [ ! -f "$IMAGE" ]; then
-          echo "❌ Image not found — GKI build failed"
-          exit 1
+        IMAGE="kernel_source/arch/arm64/boot/Image"
+        if [ -f "$IMAGE" ]; then
+          echo "✅ Image: $(du -h $IMAGE | cut -f1)"
+          echo "image=$IMAGE"         >> $GITHUB_OUTPUT
+          echo "image_found=true"     >> $GITHUB_OUTPUT
+        else
+          echo "❌ Image not found — build failed, check artifacts for build.log"
+          echo "image_found=false"    >> $GITHUB_OUTPUT
         fi
-
-        echo "✅ Image: $(du -h $IMAGE | cut -f1)"
-        [ -f "$IMAGE_LZ4" ] && echo "✅ Image.lz4: $(du -h $IMAGE_LZ4 | cut -f1)"
-        echo "image=$IMAGE" >> $GITHUB_OUTPUT
-        echo "image_lz4=$IMAGE_LZ4" >> $GITHUB_OUTPUT
 
     - name: Upload to GoFile
-      if: always() && steps.package.outcome == 'success'
+      if: always() && steps.package.outputs.image_found == 'true'
       run: |
         SERVER=$(curl -s https://api.gofile.io/servers | \
-          python3 -c "import sys,json; d=json.load(sys.stdin); print(d['data']['servers'][0]['name'])")
-        RESP=$(curl -s -F "file=@${{ steps.package.outputs.image }}" "https://$SERVER.gofile.io/uploadFile")
-        echo "✅ Image → $(echo $RESP | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['data']['downloadPage'])")"
-        if [ -f "${{ steps.package.outputs.image_lz4 }}" ]; then
-          RESP=$(curl -s -F "file=@${{ steps.package.outputs.image_lz4 }}" "https://$SERVER.gofile.io/uploadFile")
-          echo "✅ Image.lz4 → $(echo $RESP | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['data']['downloadPage'])")"
-        fi
+          python3 -c "import sys,json; d=json.load(sys.stdin); \
+                      print(d['data']['servers'][0]['name'])")
+        RESP=$(curl -s \
+          -F "file=@${{ steps.package.outputs.image }}" \
+          "https://$SERVER.gofile.io/uploadFile")
+        echo "✅ Image → $(echo $RESP | python3 -c \
+          "import sys,json; d=json.load(sys.stdin); \
+           print(d['data']['downloadPage'])")"
 
-    - name: Upload to GitHub Artifacts
-      if: always() && steps.package.outcome == 'success'
+    - name: Upload Artifacts
+      if: always()
       uses: actions/upload-artifact@v4
       with:
-        name: Fold4-KSUNext-SUSFS-Droidspaces
+        name: Note8-SukiSU-Ultra
         path: |
           ${{ steps.package.outputs.image }}
-          ${{ steps.package.outputs.image_lz4 }}
+          kernel_source/build.log
+        if-no-files-found: ignore
         compression-level: 0
 
-    # ── 20. Collect patch rejects (always) ─────────────────────────────────────
-    - name: Collect Patch Rejects
+    # ── 10. Surface Build Errors ───────────────────────────────────────────────
+    - name: Surface Build Errors
       if: always()
       run: |
-        REJECTS_DIR="$GITHUB_WORKSPACE/patch-rejects"
-        mkdir -p "$REJECTS_DIR"
-        mapfile -t REJS < <(find kernel_platform -name "*.rej" 2>/dev/null)
-        if [ ${#REJS[@]} -eq 0 ]; then
-          echo "✅ No rejected patches"
+        if [ ! -f kernel_source/build.log ]; then
+          echo "No build log found"
           exit 0
         fi
-        echo "⚠️ Collecting ${#REJS[@]} reject file(s):"
-        for REJ in "${REJS[@]}"; do
-          echo "  $REJ"
-          REL="${REJ#kernel_platform/}"
-          DEST="$REJECTS_DIR/$REL"
-          mkdir -p "$(dirname "$DEST")"
-          cp "$REJ" "$DEST"
-          ORIG="${REJ%.rej}"
-          [ -f "$ORIG" ] && cp "$ORIG" "$REJECTS_DIR/${REL%.rej}"
-        done
-
-    - name: Upload Patch Rejects
-      if: always()
-      uses: actions/upload-artifact@v4
-      with:
-        name: patch-rejects
-        path: patch-rejects/
-        if-no-files-found: ignore
+        ERRORS=$(grep -c "error:" kernel_source/build.log 2>/dev/null || true)
+        echo "=== $ERRORS error(s) found ==="
+        grep "error:" kernel_source/build.log | head -60 || true
+        echo ""
+        echo "=== First 10 warnings ==="
+        grep "warning:" kernel_source/build.log | head -10 || true
