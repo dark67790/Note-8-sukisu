@@ -1,4 +1,3 @@
-
 name: Build Note8 Kernel (SukiSU-Ultra)
 
 permissions:
@@ -35,20 +34,25 @@ jobs:
         git clone --depth=1 https://github.com/ace2nutzer/Samsung_dreamlte_Kernel \
           kernel_source
 
+    # ── 3.1 Clone Toolchain ────────────────────────────────────────────────────
+    - name: Clone Toolchain
+      run: |
+        git clone --depth=1 \
+          https://github.com/LineageOS/android_prebuilts_gcc_linux-x86_aarch64_aarch64-linux-android-4.9 \
+          toolchain-aarch64
+
     # ── 3.5 Fix Toolchain Permissions ──────────────────────────────────────────
     - name: Fix Toolchain Permissions
       run: |
-        chmod +x kernel_source/toolchain/gcc-cfp/gcc-cfp-jopp-only/aarch64-linux-android-4.9/bin/*
+        chmod +x toolchain-aarch64/bin/*
         echo "✅ Toolchain permissions fixed"
 
     # ── 4. Environment Variables ───────────────────────────────────────────────
     - name: Set Environment Variables
       run: |
-        KROOT=$GITHUB_WORKSPACE/kernel_source
-        TC=$KROOT/toolchain/gcc-cfp/gcc-cfp-jopp-only/aarch64-linux-android-4.9/bin
-        echo "KROOT=$KROOT"                                   >> $GITHUB_ENV
-        echo "CROSS_COMPILE=$TC/aarch64-linux-android-"      >> $GITHUB_ENV
-        echo "PATCHES=$GITHUB_WORKSPACE/patches"             >> $GITHUB_ENV
+        echo "KROOT=$GITHUB_WORKSPACE/kernel_source"                        >> $GITHUB_ENV
+        echo "CROSS_COMPILE=$GITHUB_WORKSPACE/toolchain-aarch64/bin/aarch64-linux-android-" >> $GITHUB_ENV
+        echo "PATCHES=$GITHUB_WORKSPACE/patches"                           >> $GITHUB_ENV
 
     # ── 5. Setup SukiSU-Ultra ──────────────────────────────────────────────────
     - name: Setup SukiSU-Ultra
