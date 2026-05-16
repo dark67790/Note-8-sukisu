@@ -2,7 +2,9 @@
 # sukisu_compat_fix.py — SukiSU 4.4 ARM64 compatibility fixes
 # Run from kernel_source/
 
-import glob, re
+import glob
+import os
+import re
 
 def fix(path, old, new, label):
     with open(path, 'r') as f:
@@ -139,7 +141,40 @@ else:
 # ── Fix 15: __nocfi not defined in GCC 8 / 4.4 kernels ───────────────────
 fix_all('__nocfi ', '', '__nocfi stripped')
 
-print("\n✅ All SukiSU 4.4 compat fixes applied")
-
-# Fix 16: strncpy_from_user_nofault → strncpy_from_user (added in 5.8)
+# ── Fix 16: strncpy_from_user_nofault → strncpy_from_user (added in 5.8) ──
 fix_all('strncpy_from_user_nofault', 'strncpy_from_user', 'strncpy_from_user_nofault → strncpy_from_user')
+
+# ── Fix 17: lsm_hook.c uses 6.x LSM static_call API — exclude for 4.4, stub it out ──
+fix('drivers/kernelsu/Kbuild',
+    'kernelsu-objs += hook/lsm_hook.o',
+    'ifeq ($(shell expr $(VERSION) \\< 6),1)\n'
+    'kernelsu-objs += hook/lsm_hook_stub.o\n'
+    'else\n'
+    'kernelsu-objs += hook/lsm_hook.o\n'
+    'endif',
+    'Kbuild: exclude lsm_hook.c for < 6.0')
+
+# Create the stub
+stub = '''\
+/* lsm_hook_stub.c — lsm_hook.c uses 6.x static_call LSM API unavailable on 4.4 */
+#include <linux/init.h>
+#include <linux/types.h>
+
+struct ksu_lsm_hook;
+
+int  ksu_lsm_hook(struct ksu_lsm_hook *hook)          { return 0; }
+void ksu_lsm_unhook(struct ksu_lsm_hook *hook)         {}
+int  ksu_register_lsm_hook(struct ksu_lsm_hook *hook)  { return 0; }
+void ksu_unregister_lsm_hook(struct ksu_lsm_hook *hook){}
+void __init ksu_lsm_hook_init(void)                    {}
+void __exit ksu_lsm_hook_exit(void)                    {}
+'''
+stub_path = 'drivers/kernelsu/hook/lsm_hook_stub.c'
+if not os.path.exists(stub_path):
+    with open(stub_path, 'w') as f:
+        f.write(stub)
+    print('✅ lsm_hook_stub.c created')
+else:
+    print('⚠️  lsm_hook_stub.c already exists')
+
+print("\n✅ All SukiSU 4.4 compat fixes applied")
