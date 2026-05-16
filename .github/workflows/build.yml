@@ -49,19 +49,24 @@ jobs:
           "https://raw.githubusercontent.com/SukiSU-Ultra/SukiSU-Ultra/main/kernel/setup.sh" \
           | bash -s main || true
 
-        # Verify integration landed
         FAIL=0
-        grep -q "config KSU\|KSU_SUSFS" drivers/kernelsu/Kconfig && echo "✅ Kconfig has KSU" || { echo "❌ Kconfig missing KSU"; FAIL=1; }
-        grep -q "kernelsu"    drivers/Makefile           && echo "✅ Makefile wired"    || { echo "❌ Makefile not wired";   FAIL=1; }
-        grep -q "kernelsu"    drivers/Kconfig            && echo "✅ Kconfig sourced"   || { echo "❌ Kconfig not sourced";  FAIL=1; }
-        [ -d drivers/kernelsu ] && echo "✅ driver dir exists" || { echo "❌ driver dir missing"; FAIL=1; }
-        [ "$FAIL" -ne 0 ] && { echo "❌ SukiSU setup failed"; exit 1; }
+        grep -q "config KSU\|KSU_SUSFS" drivers/kernelsu/Kconfig \
+          && echo "✅ Kconfig has KSU" || { echo "❌ Kconfig missing KSU"; FAIL=1; }
+        grep -q "kernelsu" drivers/Makefile \
+          && echo "✅ Makefile wired"  || { echo "❌ Makefile not wired";  FAIL=1; }
+        grep -q "kernelsu" drivers/Kconfig \
+          && echo "✅ Kconfig sourced" || { echo "❌ Kconfig not sourced"; FAIL=1; }
+        [ -d drivers/kernelsu ] \
+          && echo "✅ driver dir exists" || { echo "❌ driver dir missing"; FAIL=1; }
+        if [ "$FAIL" -ne 0 ]; then
+          echo "❌ SukiSU setup failed"
+          exit 1
+        fi
 
     # ── 6. Fix Kconfig for non-GKI 4.4 ────────────────────────────────────────
     - name: Patch Kconfig KPROBES dependency
       working-directory: kernel_source
       run: |
-        # 4.4 has no CONFIG_KPROBES — remove it from depends so CONFIG_KSU is selectable
         sed -i 's/depends on KPROBES && EXT4_FS/depends on EXT4_FS/' \
           drivers/kernelsu/Kconfig
         grep "depends on" drivers/kernelsu/Kconfig | head -3
@@ -98,12 +103,10 @@ jobs:
         export ARCH=arm64
         export CROSS_COMPILE=${{ env.CROSS_COMPILE }}
 
-        # Merge base + model defconfigs (mirrors what build.sh does)
         ARCH=arm64 scripts/kconfig/merge_config.sh \
           arch/arm64/configs/g950x_defconfig \
           arch/arm64/configs/n950x_defconfig
 
-        # Verify KSU made it into .config
         grep "CONFIG_KSU=y" .config \
           && echo "✅ CONFIG_KSU=y in final config" \
           || echo "⚠️  CONFIG_KSU not in final config"
@@ -118,11 +121,11 @@ jobs:
         IMAGE="kernel_source/arch/arm64/boot/Image"
         if [ -f "$IMAGE" ]; then
           echo "✅ Image: $(du -h $IMAGE | cut -f1)"
-          echo "image=$IMAGE"         >> $GITHUB_OUTPUT
-          echo "image_found=true"     >> $GITHUB_OUTPUT
+          echo "image=$IMAGE"      >> $GITHUB_OUTPUT
+          echo "image_found=true"  >> $GITHUB_OUTPUT
         else
-          echo "❌ Image not found — build failed, check artifacts for build.log"
-          echo "image_found=false"    >> $GITHUB_OUTPUT
+          echo "❌ Image not found — check build.log artifact"
+          echo "image_found=false" >> $GITHUB_OUTPUT
         fi
 
     - name: Upload to GoFile
@@ -157,7 +160,7 @@ jobs:
           echo "No build log found"
           exit 0
         fi
-        ERRORS=$(grep -c "error:" kernel_source/build.log 2>/dev/null || true)
+        ERRORS=$(grep -c "error:" kernel_source/build.log 2>/dev/null || echo 0)
         echo "=== $ERRORS error(s) found ==="
         grep "error:" kernel_source/build.log | head -60 || true
         echo ""
