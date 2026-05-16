@@ -34,20 +34,21 @@ jobs:
         git clone --depth=1 https://github.com/ace2nutzer/Samsung_dreamlte_Kernel \
           kernel_source
 
-    # ── 3.5 Fix Toolchain Permissions ──────────────────────────────────────────
-    - name: Fix Toolchain Permissions
+    # ── 3.5 Download Toolchain ─────────────────────────────────────────────────
+    - name: Download Toolchain
       run: |
-        find kernel_source/toolchain -type f | xargs chmod +x
-        echo "✅ Toolchain permissions fixed"
+        wget -q https://developer.arm.com/-/media/Files/downloads/gnu-a/8.3-2019.03/binrel/gcc-arm-8.3-2019.03-x86_64-aarch64-linux-gnu.tar.xz
+        tar -xf gcc-arm-8.3-2019.03-x86_64-aarch64-linux-gnu.tar.xz
+        rm gcc-arm-8.3-2019.03-x86_64-aarch64-linux-gnu.tar.xz
+        echo "✅ ARM GCC 8.3 toolchain ready"
 
     # ── 4. Environment Variables ───────────────────────────────────────────────
     - name: Set Environment Variables
       run: |
-        KROOT=$GITHUB_WORKSPACE/kernel_source
-        TC=$KROOT/toolchain/gcc-cfp/gcc-cfp-jopp-only/aarch64-linux-android-4.9/bin
-        echo "KROOT=$KROOT"                              >> $GITHUB_ENV
-        echo "CROSS_COMPILE=$TC/aarch64-linux-android-" >> $GITHUB_ENV
-        echo "PATCHES=$GITHUB_WORKSPACE/patches"        >> $GITHUB_ENV
+        TC=$GITHUB_WORKSPACE/gcc-arm-8.3-2019.03-x86_64-aarch64-linux-gnu/bin
+        echo "KROOT=$GITHUB_WORKSPACE/kernel_source"  >> $GITHUB_ENV
+        echo "CROSS_COMPILE=$TC/aarch64-linux-gnu-"   >> $GITHUB_ENV
+        echo "PATCHES=$GITHUB_WORKSPACE/patches"      >> $GITHUB_ENV
 
     # ── 5. Setup SukiSU-Ultra ──────────────────────────────────────────────────
     - name: Setup SukiSU-Ultra
