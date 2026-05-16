@@ -86,6 +86,11 @@ jobs:
       working-directory: kernel_source
       run: python3 ${{ env.PATCHES }}/sukisu_compat_fix.py
 
+    # ── 6.6 Apply Manual KSU Hooks ─────────────────────────────────────────────
+    - name: Apply Manual KSU Hooks
+      working-directory: kernel_source
+      run: python3 ${{ env.PATCHES }}/manual_hooks.py
+
     # ── 7. Kernel Config ───────────────────────────────────────────────────────
     - name: Set Kernel Config
       working-directory: kernel_source
