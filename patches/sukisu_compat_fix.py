@@ -1,3 +1,4 @@
+
 #!/usr/bin/env python3
 # sukisu_compat_fix.py — SukiSU 4.4 ARM64 compatibility fixes
 # Run from kernel_source/
@@ -48,6 +49,19 @@ for path in glob.glob('drivers/kernelsu/**/*', recursive=True):
         with open(path, 'w') as f:
             f.write(s.replace('#include <linux/compiler_types.h>', '#include <linux/compiler.h>'))
         print(f"✅ compiler_types.h fix: {path}")
+    except (IsADirectoryError, UnicodeDecodeError):
+        continue
+
+# Fix 4: linux/pgtable.h doesn't exist before 5.8 — fix all files in driver
+for path in glob.glob('drivers/kernelsu/**/*', recursive=True):
+    try:
+        with open(path, 'r') as f:
+            s = f.read()
+        if '#include <linux/pgtable.h>' not in s:
+            continue
+        with open(path, 'w') as f:
+            f.write(s.replace('#include <linux/pgtable.h>', '#include <asm/pgtable.h>'))
+        print(f"✅ pgtable.h fix: {path}")
     except (IsADirectoryError, UnicodeDecodeError):
         continue
 
