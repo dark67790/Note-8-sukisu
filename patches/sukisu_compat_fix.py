@@ -89,8 +89,13 @@ fix_all('#include <linux/input-event-codes.h>', '#include <linux/input.h>', 'inp
 # ── Fix 10: set_memory.h → asm/set_memory.h (added in 5.2) ───────────────
 fix_all('#include <linux/set_memory.h>', '#include <asm/set_memory.h>', 'set_memory.h → asm/set_memory.h')
 
-# ── Fix 11: p4d_t doesn't exist before 4.12 ───────────────────────────────
-p4d_compat = (
+# ── Fix 11 (corrected): patch_memory.c — insert compat AFTER includes, not before ──
+path = 'drivers/kernelsu/hook/arm64/patch_memory.c'
+with open(path, 'r') as f:
+    s = f.read()
+
+# Remove old incorrectly prepended block if present
+old_block = (
     '#include <linux/version.h>\n'
     '#if LINUX_VERSION_CODE < KERNEL_VERSION(4, 12, 0)\n'
     'typedef pgd_t p4d_t;\n'
@@ -100,15 +105,35 @@ p4d_compat = (
     '#define p4d_val(x) pgd_val(*((pgd_t *)&(x)))\n'
     '#endif\n\n'
 )
-path = 'drivers/kernelsu/hook/arm64/patch_memory.c'
-with open(path, 'r') as f:
-    s = f.read()
-if 'KERNEL_VERSION(4, 12, 0)' not in s:
-    with open(path, 'w') as f:
-        f.write(p4d_compat + s)
-    print('✅ patch_memory.c: p4d_t compat')
+s = s.replace(old_block, '')
+
+compat = (
+    '#include "asm-generic/fixmap.h"\n\n'
+    '#include <linux/version.h>\n'
+    '#if LINUX_VERSION_CODE < KERNEL_VERSION(4, 12, 0)\n'
+    'typedef pgd_t p4d_t;\n'
+    'static inline p4d_t *p4d_offset(pgd_t *pgd, unsigned long addr) { return (p4d_t *)pgd; }\n'
+    'static inline int p4d_none(p4d_t p4d) { return 0; }\n'
+    'static inline int p4d_bad(p4d_t p4d) { return 0; }\n'
+    '#define p4d_val(x) pgd_val(*((pgd_t *)&(x)))\n'
+    '#endif\n'
+    '#ifndef __pte_to_phys\n'
+    '#define __pte_to_phys(pte) (pte_pfn(pte) << PAGE_SHIFT)\n'
+    '#endif\n'
+    '#ifndef __flush_icache_range\n'
+    '#define __flush_icache_range flush_icache_range\n'
+    '#endif\n'
+)
+
+anchor = '#include "asm-generic/fixmap.h"'
+if anchor in s and 'KERNEL_VERSION(4, 12, 0)' not in s:
+    s = s.replace(anchor, compat, 1)
+    print('✅ patch_memory.c: p4d_t + __pte_to_phys + __flush_icache_range compat')
 else:
-    print('⚠️  patch_memory.c: p4d_t already patched')
+    print('⚠️  patch_memory.c: already patched or anchor not found')
+
+with open(path, 'w') as f:
+    f.write(s)
 
 # ── Fix 12: copy_to_kernel_nofault → probe_kernel_write (added in 5.8) ────
 fix('drivers/kernelsu/hook/arm64/patch_memory.c',
