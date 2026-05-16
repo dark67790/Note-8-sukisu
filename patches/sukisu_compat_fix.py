@@ -177,4 +177,14 @@ if not os.path.exists(stub_path):
 else:
     print('⚠️  lsm_hook_stub.c already exists')
 
+# ── Fix 18: syscall_event_bridge.c missing uaccess.h + untagged_addr not in 4.4 ──
+fix('drivers/kernelsu/hook/syscall_event_bridge.c',
+    '#include <linux/ptrace.h>',
+    '#include <linux/ptrace.h>\n'
+    '#include <linux/uaccess.h>\n'
+    '#ifndef untagged_addr\n'
+    '#define untagged_addr(addr) (addr)\n'
+    '#endif',
+    'syscall_event_bridge.c: uaccess + untagged_addr compat')
+
 print("\n✅ All SukiSU 4.4 compat fixes applied")
