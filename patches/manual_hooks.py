@@ -18,7 +18,7 @@ def fix_regex(path, pattern, replacement, label):
     with open(path, 'r') as f:
         s = f.read()
     if not re.search(pattern, s, re.DOTALL):
-        print(f"⚠️  {label}: pattern context not found")
+        print(f"⚠️  {label}: pattern not found")
         return
     with open(path, 'w') as f:
         f.write(re.sub(pattern, replacement, s, count=1, flags=re.DOTALL))
@@ -28,7 +28,6 @@ def fix_regex(path, pattern, replacement, label):
 fix('fs/exec.c',
     'static int do_execveat_common(int fd, struct filename *filename,',
     '#ifdef CONFIG_KSU\n'
-    'extern bool ksu_execveat_hook __read_mostly;\n'
     'extern int ksu_handle_execveat(int *fd, struct filename **filename_ptr,\n'
     '\t\t\tvoid *argv, void *envp, int *flags);\n'
     'extern int ksu_handle_execveat_sucompat(int *fd, struct filename **filename_ptr,\n'
@@ -41,10 +40,8 @@ fix('fs/exec.c',
     '\tint retval;\n\n\tif (IS_ERR(filename))',
     '\tint retval;\n\n'
     '#ifdef CONFIG_KSU\n'
-    '\tif (unlikely(ksu_execveat_hook))\n'
-    '\t\tksu_handle_execveat(&fd, &filename, &argv, &envp, &flags);\n'
-    '\telse\n'
-    '\t\tksu_handle_execveat_sucompat(&fd, &filename, &argv, &envp, &flags);\n'
+    '\tksu_handle_execveat(&fd, &filename, &argv, &envp, &flags);\n'
+    '\tksu_handle_execveat_sucompat(&fd, &filename, &argv, &envp, &flags);\n'
     '#endif\n\n'
     '\tif (IS_ERR(filename))',
     'exec.c: hook')
@@ -88,16 +85,15 @@ fix('fs/stat.c',
     '\tif ((flag & ~(AT_SYMLINK_NOFOLLOW',
     'stat.c: ksu_handle_stat hook')
 
-# Anchored to the exact system call definitions to prevent function-bleeding
 fix_regex('fs/stat.c',
-          r'(SYSCALL_DEFINE2\s*\(\s*newfstat\s*,.*?cp_new_stat\s*\(\s*&stat\s*,\s*statbuf\s*\);)',
-          r'\1\n#ifdef CONFIG_KSU\n\tksu_handle_newfstat_ret(&fd, &statbuf);\n#endif',
-          'stat.c: ksu_handle_newfstat_ret hook (targeted)')
+    r'(SYSCALL_DEFINE2\s*\(\s*newfstat\s*,.*?cp_new_stat\s*\(\s*&stat\s*,\s*statbuf\s*\);)',
+    r'\1\n#ifdef CONFIG_KSU\n\tksu_handle_newfstat_ret(&fd, &statbuf);\n#endif',
+    'stat.c: ksu_handle_newfstat_ret hook')
 
 fix_regex('fs/stat.c',
-          r'(SYSCALL_DEFINE2\s*\(\s*fstat64\s*,.*?cp_new_stat64\s*\(\s*&stat\s*,\s*statbuf\s*\);)',
-          r'\1\n#ifdef CONFIG_KSU\n\tksu_handle_fstat64_ret(&fd, &statbuf);\n#endif',
-          'stat.c: ksu_handle_fstat64_ret hook (targeted)')
+    r'(SYSCALL_DEFINE2\s*\(\s*fstat64\s*,.*?cp_new_stat64\s*\(\s*&stat\s*,\s*statbuf\s*\);)',
+    r'\1\n#ifdef CONFIG_KSU\n\tksu_handle_fstat64_ret(&fd, &statbuf);\n#endif',
+    'stat.c: ksu_handle_fstat64_ret hook')
 
 # ── kernel/reboot.c ────────────────────────────────────────────────────────
 fix('kernel/reboot.c',
