@@ -34,7 +34,7 @@ jobs:
         git clone --depth=1 https://github.com/ace2nutzer/Samsung_dreamlte_Kernel \
           kernel_source
 
-    # ── 3.5 Download Toolchain ─────────────────────────────────────────────────
+    # ── 4. Download Toolchain ──────────────────────────────────────────────────
     - name: Download Toolchain
       run: |
         wget -q https://developer.arm.com/-/media/Files/downloads/gnu-a/8.3-2019.03/binrel/gcc-arm-8.3-2019.03-x86_64-aarch64-linux-gnu.tar.xz
@@ -42,7 +42,7 @@ jobs:
         rm gcc-arm-8.3-2019.03-x86_64-aarch64-linux-gnu.tar.xz
         echo "✅ ARM GCC 8.3 toolchain ready"
 
-    # ── 4. Environment Variables ───────────────────────────────────────────────
+    # ── 5. Environment Variables ───────────────────────────────────────────────
     - name: Set Environment Variables
       run: |
         TC=$GITHUB_WORKSPACE/gcc-arm-8.3-2019.03-x86_64-aarch64-linux-gnu/bin
@@ -50,7 +50,7 @@ jobs:
         echo "CROSS_COMPILE=$TC/aarch64-linux-gnu-"   >> $GITHUB_ENV
         echo "PATCHES=$GITHUB_WORKSPACE/patches"      >> $GITHUB_ENV
 
-    # ── 5. Setup ReSukiSU ──────────────────────────────────────────────────────
+    # ── 6. Setup ReSukiSU ──────────────────────────────────────────────────────
     - name: Setup ReSukiSU
       working-directory: kernel_source
       run: |
@@ -58,12 +58,10 @@ jobs:
           "https://raw.githubusercontent.com/ReSukiSU/ReSukiSU/main/kernel/setup.sh" \
           | bash -s main || true
         FAIL=0
-        grep -q "config KSU\|KSU_SUSFS" drivers/kernelsu/Kconfig \
+        grep -q "config KSU" drivers/kernelsu/Kconfig \
           && echo "✅ Kconfig has KSU" || { echo "❌ Kconfig missing KSU"; FAIL=1; }
         grep -q "kernelsu" drivers/Makefile \
           && echo "✅ Makefile wired"  || { echo "❌ Makefile not wired";  FAIL=1; }
-        grep -q "kernelsu" drivers/Kconfig \
-          && echo "✅ Kconfig sourced" || { echo "❌ Kconfig not sourced"; FAIL=1; }
         [ -d drivers/kernelsu ] \
           && echo "✅ driver dir exists" || { echo "❌ driver dir missing"; FAIL=1; }
         if [ "$FAIL" -ne 0 ]; then
@@ -71,58 +69,27 @@ jobs:
           exit 1
         fi
 
-    # ── 5.5 Strip KPROBES Dependency ───────────────────────────────────────────
-    - name: Strip KPROBES Dependency
-      working-directory: kernel_source
-      run: |
-        sed -i 's/depends on KPROBES && EXT4_FS/depends on EXT4_FS/g' drivers/kernelsu/Kconfig || true
-        sed -i 's/depends on KPROBES//g' drivers/kernelsu/Kconfig || true
-        echo "✅ KPROBES dependency explicitly removed"
-
-    # ── 5.7 Force Bypass Non-GKI Build Abort Check ─────────────────────────────
-    - name: Force Bypass Non-GKI Build Abort Check
-      working-directory: kernel_source
-      run: |
-        # Strip out the explicit $(error ...) trigger halting non-GKI environments
-        sed -i 's/\$(error TP hooks are incompatible with Non-GKI\/GKI 1.0 kernels..)/echo "Bypassing Non-GKI check restriction"/g' drivers/kernelsu/Kbuild || true
-        echo "✅ Disabled manual non-GKI compilation restrictions within Kbuild"
-
-    # ── 6. Apply ReSukiSU 4.4 Compat Fixes ─────────────────────────────────────
+    # ── 7. Apply ReSukiSU 4.4 Compat Fixes ────────────────────────────────────
     - name: Apply ReSukiSU 4.4 Compat Fixes
       working-directory: kernel_source
       run: python3 ${{ env.PATCHES }}/sukisu_compat_fix.py
 
-    # ── 6.5 Apply Manual KSU Hooks ─────────────────────────────────────────────
+    # ── 8. Apply Manual KSU Hooks ─────────────────────────────────────────────
     - name: Apply Manual KSU Hooks
       working-directory: kernel_source
       run: python3 ${{ env.PATCHES }}/manual_hooks.py
 
-    # ── 6.7 Force Manual Hook Compilation ──────────────────────────────────────
-    - name: Force Manual Hook Compilation
-      working-directory: kernel_source
-      run: |
-        cat >> drivers/kernelsu/Makefile << 'EOF'
-        ccflags-y += -DCONFIG_KSU_MANUAL_HOOK=1
-        ccflags-y += -DCONFIG_KSU_MANUAL_HOOK_AUTO_SETUID_HOOK=1
-        ccflags-y += -DCONFIG_KSU_MANUAL_HOOK_AUTO_INITRC_HOOK=1
-        ccflags-y += -DCONFIG_KSU_MANUAL_HOOK_AUTO_INPUT_HOOK=1
-        EOF
-        echo "✅ Hardcoded manual hook flags into KernelSU Makefile"
-
-    # ── 7. Kernel Config ───────────────────────────────────────────────────────
+    # ── 9. Kernel Config ───────────────────────────────────────────────────────
     - name: Set Kernel Config
       working-directory: kernel_source
       run: |
         cat >> arch/arm64/configs/n950x_defconfig << 'EOF'
-        # Force disable Kprobes so KernelSU compiles manual hooks instead
-        CONFIG_KPROBES=n
-        CONFIG_KPROBE_EVENTS=n
-
-        # Base KSU Enablement
         CONFIG_KSU=y
+        CONFIG_KSU_MANUAL_HOOK=y
+        CONFIG_KSU_MANUAL_HOOK_AUTO_SETUID_HOOK=y
+        CONFIG_KSU_MANUAL_HOOK_AUTO_INITRC_HOOK=y
+        CONFIG_KSU_MANUAL_HOOK_AUTO_INPUT_HOOK=y
         CONFIG_KALLSYMS_ALL=y
-
-        # Disable Samsung security — required for syscall table patching
         CONFIG_UH=n
         CONFIG_UH_RKP=n
         CONFIG_UH_LKMAUTH=n
@@ -136,39 +103,34 @@ jobs:
         CONFIG_KDP_NS=n
         CONFIG_KDP=n
         EOF
-        echo "✅ n950x_defconfig updated with explicit overrides"
+        echo "✅ n950x_defconfig updated"
 
-    # ── 8. Build ───────────────────────────────────────────────────────────────
+    # ── 10. Build ──────────────────────────────────────────────────────────────
     - name: Build Kernel
       working-directory: kernel_source
-      shell: bash
       run: |
-        set -o pipefail
         export ARCH=arm64
         export CROSS_COMPILE=${{ env.CROSS_COMPILE }}
-        
-        scripts/kconfig/merge_config.sh \
+        ARCH=arm64 scripts/kconfig/merge_config.sh \
           arch/arm64/configs/g950x_defconfig \
           arch/arm64/configs/n950x_defconfig
-
         grep "CONFIG_KSU=y" .config \
-          && echo "✅ CONFIG_KSU=y verified in working .config" \
-          || echo "⚠️  CONFIG_KSU verification missed"
+          && echo "✅ CONFIG_KSU=y in final config" \
+          || echo "⚠️  CONFIG_KSU not in final config"
+        make -j$(nproc) ARCH=arm64 CROSS_COMPILE=$CROSS_COMPILE 2>&1 | tee build.log || true
 
-        make -j$(nproc) ARCH=arm64 CROSS_COMPILE=$CROSS_COMPILE 2>&1 | tee build.log
-
-    # ── 9. Grab Image ──────────────────────────────────────────────────────────
+    # ── 11. Grab Image ─────────────────────────────────────────────────────────
     - name: Grab Kernel Image
       if: always()
       id: package
       run: |
-        IMAGE=$(find kernel_source/arch/arm64/boot/ -maxdepth 1 -name "Image*" -not -name "*.cmd" | head -n 1)
+        IMAGE="kernel_source/arch/arm64/boot/Image"
         if [ -f "$IMAGE" ]; then
-          echo "✅ Found Image asset at: $IMAGE ($(du -h $IMAGE | cut -f1))"
+          echo "✅ Image: $(du -h $IMAGE | cut -f1)"
           echo "image=$IMAGE"      >> $GITHUB_OUTPUT
           echo "image_found=true"  >> $GITHUB_OUTPUT
         else
-          echo "❌ Image asset missing from build output directory"
+          echo "❌ Image not found — check build.log artifact"
           echo "image_found=false" >> $GITHUB_OUTPUT
         fi
 
@@ -191,12 +153,12 @@ jobs:
       with:
         name: Note8-ReSukiSU
         path: |
-          kernel_source/arch/arm64/boot/Image*
+          ${{ steps.package.outputs.image }}
           kernel_source/build.log
         if-no-files-found: ignore
         compression-level: 0
 
-    # ── 10. Surface Build Errors ───────────────────────────────────────────────
+    # ── 12. Surface Build Errors ───────────────────────────────────────────────
     - name: Surface Build Errors
       if: always()
       run: |
@@ -204,6 +166,14 @@ jobs:
           echo "No build log found"
           exit 0
         fi
+        echo "=== KSU driver errors ==="
+        grep -n "kernelsu\|drivers/kernelsu" kernel_source/build.log \
+          | grep "error:" | head -30 || true
+        echo ""
+        echo "=== All errors ==="
         ERRORS=$(grep -c "error:" kernel_source/build.log 2>/dev/null || echo 0)
-        echo "=== $ERRORS error(s) found ==="
-        grep -i "error:" kernel_source/build.log | head -60 || true
+        echo "$ERRORS error(s) found"
+        grep "error:" kernel_source/build.log | head -60 || true
+        echo ""
+        echo "=== First 10 warnings ==="
+        grep "warning:" kernel_source/build.log | head -10 || true
