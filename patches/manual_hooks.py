@@ -2,6 +2,8 @@
 # manual_hooks.py — ReSukiSU manual hooks for non-GKI 4.4
 # Run from kernel_source/
 
+import re
+
 def fix(path, old, new, label):
     with open(path, 'r') as f:
         s = f.read()
@@ -10,6 +12,16 @@ def fix(path, old, new, label):
         return
     with open(path, 'w') as f:
         f.write(s.replace(old, new, 1))
+    print(f"✅ {label}")
+
+def fix_regex(path, pattern, replacement, label):
+    with open(path, 'r') as f:
+        s = f.read()
+    if not re.search(pattern, s, re.DOTALL):
+        print(f"⚠️  {label}: pattern context not found")
+        return
+    with open(path, 'w') as f:
+        f.write(re.sub(pattern, replacement, s, count=1, flags=re.DOTALL))
     print(f"✅ {label}")
 
 # ── fs/exec.c ──────────────────────────────────────────────────────────────
@@ -76,23 +88,16 @@ fix('fs/stat.c',
     '\tif ((flag & ~(AT_SYMLINK_NOFOLLOW',
     'stat.c: ksu_handle_stat hook')
 
-fix('fs/stat.c',
-    '\t\terror = cp_new_stat(&stat, statbuf);\n\n\treturn error;\n}',
-    '\t\terror = cp_new_stat(&stat, statbuf);\n\n'
-    '#ifdef CONFIG_KSU\n'
-    '\tksu_handle_newfstat_ret(&fd, &statbuf);\n'
-    '#endif\n\n'
-    '\treturn error;\n}',
-    'stat.c: ksu_handle_newfstat_ret hook')
+# Regex hooks isolate the precise function block containing vfs_fstat(fd, ...)
+fix_regex('fs/stat.c',
+          r'(int\s+error\s*=\s*vfs_fstat\s*\(\s*fd\s*,\s*&stat\s*\);.*?cp_new_stat\s*\(\s*&stat\s*,\s*statbuf\s*\);)',
+          r'\1\n#ifdef CONFIG_KSU\n\tksu_handle_newfstat_ret(&fd, &statbuf);\n#endif',
+          'stat.c: ksu_handle_newfstat_ret hook (targeted)')
 
-fix('fs/stat.c',
-    '\t\terror = cp_new_stat64(&stat, statbuf);\n\n\treturn error;\n}',
-    '\t\terror = cp_new_stat64(&stat, statbuf);\n\n'
-    '#ifdef CONFIG_KSU\n'
-    '\tksu_handle_fstat64_ret(&fd, &statbuf);\n'
-    '#endif\n\n'
-    '\treturn error;\n}',
-    'stat.c: ksu_handle_fstat64_ret hook')
+fix_regex('fs/stat.c',
+          r'(int\s+error\s*=\s*vfs_fstat\s*\(\s*fd\s*,\s*&stat\s*\);.*?cp_new_stat64\s*\(\s*&stat\s*,\s*statbuf\s*\);)',
+          r'\1\n#ifdef CONFIG_KSU\n\tksu_handle_fstat64_ret(&fd, &statbuf);\n#endif',
+          'stat.c: ksu_handle_fstat64_ret hook (targeted)')
 
 # ── kernel/reboot.c ────────────────────────────────────────────────────────
 fix('kernel/reboot.c',
