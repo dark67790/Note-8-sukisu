@@ -30,8 +30,6 @@ fix('fs/exec.c',
     '#ifdef CONFIG_KSU\n'
     'extern int ksu_handle_execveat(int *fd, struct filename **filename_ptr,\n'
     '\t\t\tvoid *argv, void *envp, int *flags);\n'
-    'extern int ksu_handle_execveat_sucompat(int *fd, struct filename **filename_ptr,\n'
-    '\t\t\tvoid *argv, void *envp, int *flags);\n'
     '#endif\n'
     'static int do_execveat_common(int fd, struct filename *filename,',
     'exec.c: externs')
@@ -41,7 +39,6 @@ fix('fs/exec.c',
     '\tint retval;\n\n'
     '#ifdef CONFIG_KSU\n'
     '\tksu_handle_execveat(&fd, &filename, &argv, &envp, &flags);\n'
-    '\tksu_handle_execveat_sucompat(&fd, &filename, &argv, &envp, &flags);\n'
     '#endif\n\n'
     '\tif (IS_ERR(filename))',
     'exec.c: hook')
