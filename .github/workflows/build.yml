@@ -89,6 +89,18 @@ jobs:
       working-directory: kernel_source
       run: python3 ${{ env.PATCHES }}/manual_hooks.py
 
+    # ── 6.7 Force Manual Hook Compilation ──────────────────────────────────────
+    - name: Force Manual Hook Compilation
+      working-directory: kernel_source
+      run: |
+        cat >> drivers/kernelsu/Makefile << 'EOF'
+        ccflags-y += -DCONFIG_KSU_MANUAL_HOOK=1
+        ccflags-y += -DCONFIG_KSU_MANUAL_HOOK_AUTO_SETUID_HOOK=1
+        ccflags-y += -DCONFIG_KSU_MANUAL_HOOK_AUTO_INITRC_HOOK=1
+        ccflags-y += -DCONFIG_KSU_MANUAL_HOOK_AUTO_INPUT_HOOK=1
+        EOF
+        echo "✅ Hardcoded manual hook flags into KernelSU Makefile"
+
     # ── 7. Kernel Config ───────────────────────────────────────────────────────
     - name: Set Kernel Config
       working-directory: kernel_source
@@ -98,12 +110,8 @@ jobs:
         CONFIG_KPROBES=n
         CONFIG_KPROBE_EVENTS=n
 
-        # ReSukiSU Manual Hooks Configuration
+        # Base KSU Enablement
         CONFIG_KSU=y
-        CONFIG_KSU_MANUAL_HOOK=y
-        CONFIG_KSU_MANUAL_HOOK_AUTO_SETUID_HOOK=y
-        CONFIG_KSU_MANUAL_HOOK_AUTO_INITRC_HOOK=y
-        CONFIG_KSU_MANUAL_HOOK_AUTO_INPUT_HOOK=y
         CONFIG_KALLSYMS_ALL=y
 
         # Disable Samsung security — required for syscall table patching
