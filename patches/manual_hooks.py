@@ -88,14 +88,14 @@ fix('fs/stat.c',
     '\tif ((flag & ~(AT_SYMLINK_NOFOLLOW',
     'stat.c: ksu_handle_stat hook')
 
-# Regex hooks isolate the precise function block containing vfs_fstat(fd, ...)
+# Anchored to the exact system call definitions to prevent function-bleeding
 fix_regex('fs/stat.c',
-          r'(int\s+error\s*=\s*vfs_fstat\s*\(\s*fd\s*,\s*&stat\s*\);.*?cp_new_stat\s*\(\s*&stat\s*,\s*statbuf\s*\);)',
+          r'(SYSCALL_DEFINE2\s*\(\s*newfstat\s*,.*?cp_new_stat\s*\(\s*&stat\s*,\s*statbuf\s*\);)',
           r'\1\n#ifdef CONFIG_KSU\n\tksu_handle_newfstat_ret(&fd, &statbuf);\n#endif',
           'stat.c: ksu_handle_newfstat_ret hook (targeted)')
 
 fix_regex('fs/stat.c',
-          r'(int\s+error\s*=\s*vfs_fstat\s*\(\s*fd\s*,\s*&stat\s*\);.*?cp_new_stat64\s*\(\s*&stat\s*,\s*statbuf\s*\);)',
+          r'(SYSCALL_DEFINE2\s*\(\s*fstat64\s*,.*?cp_new_stat64\s*\(\s*&stat\s*,\s*statbuf\s*\);)',
           r'\1\n#ifdef CONFIG_KSU\n\tksu_handle_fstat64_ret(&fd, &statbuf);\n#endif',
           'stat.c: ksu_handle_fstat64_ret hook (targeted)')
 
