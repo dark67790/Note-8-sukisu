@@ -133,29 +133,35 @@ jobs:
     # ── 8. Build ───────────────────────────────────────────────────────────────
     - name: Build Kernel
       working-directory: kernel_source
+      shell: bash
       run: |
+        set -o pipefail
         export ARCH=arm64
         export CROSS_COMPILE=${{ env.CROSS_COMPILE }}
-        ARCH=arm64 scripts/kconfig/merge_config.sh \
+        
+        scripts/kconfig/merge_config.sh \
           arch/arm64/configs/g950x_defconfig \
           arch/arm64/configs/n950x_defconfig
+
         grep "CONFIG_KSU=y" .config \
-          && echo "✅ CONFIG_KSU=y in final config" \
-          || echo "⚠️  CONFIG_KSU not in final config"
-        make -j$(nproc) ARCH=arm64 CROSS_COMPILE=$CROSS_COMPILE 2>&1 | tee build.log || true
+          && echo "✅ CONFIG_KSU=y verified in working .config" \
+          || echo "⚠️  CONFIG_KSU verification missed"
+
+        make -j$(nproc) ARCH=arm64 CROSS_COMPILE=$CROSS_COMPILE 2>&1 | tee build.log
 
     # ── 9. Grab Image ──────────────────────────────────────────────────────────
     - name: Grab Kernel Image
       if: always()
       id: package
       run: |
-        IMAGE="kernel_source/arch/arm64/boot/Image"
+        # Check both potential compilation targets (Image vs Image.gz)
+        IMAGE=$(find kernel_source/arch/arm64/boot/ -maxdepth 1 -name "Image*" -not -name "*.cmd" | head -n 1)
         if [ -f "$IMAGE" ]; then
-          echo "✅ Image: $(du -h $IMAGE | cut -f1)"
+          echo "✅ Found Image asset at: $IMAGE ($(du -h $IMAGE | cut -f1))"
           echo "image=$IMAGE"      >> $GITHUB_OUTPUT
           echo "image_found=true"  >> $GITHUB_OUTPUT
         else
-          echo "❌ Image not found — check build.log artifact"
+          echo "❌ Image asset missing from build output directory"
           echo "image_found=false" >> $GITHUB_OUTPUT
         fi
 
@@ -178,7 +184,7 @@ jobs:
       with:
         name: Note8-ReSukiSU
         path: |
-          ${{ steps.package.outputs.image }}
+          kernel_source/arch/arm64/boot/Image*
           kernel_source/build.log
         if-no-files-found: ignore
         compression-level: 0
@@ -193,7 +199,4 @@ jobs:
         fi
         ERRORS=$(grep -c "error:" kernel_source/build.log 2>/dev/null || echo 0)
         echo "=== $ERRORS error(s) found ==="
-        grep "error:" kernel_source/build.log | head -60 || true
-        echo ""
-        echo "=== First 10 warnings ==="
-        grep "warning:" kernel_source/build.log | head -10 || true
+        grep -i "error:" kernel_source/build.log | head -60 || true
