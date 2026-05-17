@@ -71,6 +71,14 @@ jobs:
           exit 1
         fi
 
+    # ── 5.5 Strip KPROBES Dependency ───────────────────────────────────────────
+    - name: Strip KPROBES Dependency
+      working-directory: kernel_source
+      run: |
+        sed -i 's/depends on KPROBES && EXT4_FS/depends on EXT4_FS/g' drivers/kernelsu/Kconfig || true
+        sed -i 's/depends on KPROBES//g' drivers/kernelsu/Kconfig || true
+        echo "✅ KPROBES dependency explicitly removed"
+
     # ── 6. Apply ReSukiSU 4.4 Compat Fixes ─────────────────────────────────────
     - name: Apply ReSukiSU 4.4 Compat Fixes
       working-directory: kernel_source
@@ -112,7 +120,7 @@ jobs:
         CONFIG_KDP_NS=n
         CONFIG_KDP=n
         EOF
-        echo "✅ n950x_defconfig updated with explicit =n overrides"
+        echo "✅ n950x_defconfig updated with explicit overrides"
 
     # ── 8. Build ───────────────────────────────────────────────────────────────
     - name: Build Kernel
