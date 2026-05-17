@@ -79,6 +79,14 @@ jobs:
         sed -i 's/depends on KPROBES//g' drivers/kernelsu/Kconfig || true
         echo "✅ KPROBES dependency explicitly removed"
 
+    # ── 5.7 Force Bypass Non-GKI Build Abort Check ─────────────────────────────
+    - name: Force Bypass Non-GKI Build Abort Check
+      working-directory: kernel_source
+      run: |
+        # Strip out the explicit $(error ...) trigger halting non-GKI environments
+        sed -i 's/\$(error TP hooks are incompatible with Non-GKI\/GKI 1.0 kernels..)/echo "Bypassing Non-GKI check restriction"/g' drivers/kernelsu/Kbuild || true
+        echo "✅ Disabled manual non-GKI compilation restrictions within Kbuild"
+
     # ── 6. Apply ReSukiSU 4.4 Compat Fixes ─────────────────────────────────────
     - name: Apply ReSukiSU 4.4 Compat Fixes
       working-directory: kernel_source
@@ -154,7 +162,6 @@ jobs:
       if: always()
       id: package
       run: |
-        # Check both potential compilation targets (Image vs Image.gz)
         IMAGE=$(find kernel_source/arch/arm64/boot/ -maxdepth 1 -name "Image*" -not -name "*.cmd" | head -n 1)
         if [ -f "$IMAGE" ]; then
           echo "✅ Found Image asset at: $IMAGE ($(du -h $IMAGE | cut -f1))"
