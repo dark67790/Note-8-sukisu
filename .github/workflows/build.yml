@@ -86,6 +86,10 @@ jobs:
       working-directory: kernel_source
       run: |
         cat >> arch/arm64/configs/n950x_defconfig << 'EOF'
+        # Disable Kprobes to force manual hook translation compilation
+        # CONFIG_KPROBES is not set
+        # CONFIG_KPROBE_EVENTS is not set
+
         # ReSukiSU Manual Hooks Configuration
         CONFIG_KSU=y
         CONFIG_KSU_MANUAL_HOOK=y
@@ -108,7 +112,7 @@ jobs:
         CONFIG_KDP_NS=n
         CONFIG_KDP=n
         EOF
-        echo "✅ n950x_defconfig updated"
+        echo "✅ n950x_defconfig updated with Kprobe blocks"
 
     # ── 8. Build ───────────────────────────────────────────────────────────────
     - name: Build Kernel
