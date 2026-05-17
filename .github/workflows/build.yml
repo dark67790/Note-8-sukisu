@@ -1,4 +1,4 @@
-name: Build Note8 Kernel (SukiSU-Ultra)
+name: Build Note8 Kernel (ReSukiSU)
 
 permissions:
   contents: write
@@ -9,7 +9,7 @@ on:
 
 jobs:
   build:
-    name: SM-N950F · SukiSU-Ultra · Note 8
+    name: SM-N950F · ReSukiSU · Note 8
     runs-on: ubuntu-latest
 
     steps:
@@ -27,11 +27,13 @@ jobs:
           python3 git patch coreutils curl \
           build-essential cpio wget zip \
           libc6-i386 lib32stdc++6 lib32z1
+
     # ── 3. Clone Kernel Source ─────────────────────────────────────────────────
     - name: Clone Kernel Source
       run: |
         git clone --depth=1 https://github.com/ace2nutzer/Samsung_dreamlte_Kernel \
           kernel_source
+
     # ── 3.5 Download Toolchain ─────────────────────────────────────────────────
     - name: Download Toolchain
       run: |
@@ -39,6 +41,7 @@ jobs:
         tar -xf gcc-arm-8.3-2019.03-x86_64-aarch64-linux-gnu.tar.xz
         rm gcc-arm-8.3-2019.03-x86_64-aarch64-linux-gnu.tar.xz
         echo "✅ ARM GCC 8.3 toolchain ready"
+
     # ── 4. Environment Variables ───────────────────────────────────────────────
     - name: Set Environment Variables
       run: |
@@ -46,12 +49,13 @@ jobs:
         echo "KROOT=$GITHUB_WORKSPACE/kernel_source"  >> $GITHUB_ENV
         echo "CROSS_COMPILE=$TC/aarch64-linux-gnu-"   >> $GITHUB_ENV
         echo "PATCHES=$GITHUB_WORKSPACE/patches"      >> $GITHUB_ENV
-    # ── 5. Setup SukiSU-Ultra ──────────────────────────────────────────────────
-    - name: Setup SukiSU-Ultra
+
+    # ── 5. Setup ReSukiSU ──────────────────────────────────────────────────────
+    - name: Setup ReSukiSU
       working-directory: kernel_source
       run: |
         curl -LSs \
-          "https://raw.githubusercontent.com/SukiSU-Ultra/SukiSU-Ultra/main/kernel/setup.sh" \
+          "https://raw.githubusercontent.com/ReSukiSU/ReSukiSU/main/kernel/setup.sh" \
           | bash -s main || true
         FAIL=0
         grep -q "config KSU\|KSU_SUSFS" drivers/kernelsu/Kconfig \
@@ -63,23 +67,16 @@ jobs:
         [ -d drivers/kernelsu ] \
           && echo "✅ driver dir exists" || { echo "❌ driver dir missing"; FAIL=1; }
         if [ "$FAIL" -ne 0 ]; then
-          echo "❌ SukiSU setup failed"
+          echo "❌ ReSukiSU setup failed"
           exit 1
         fi
-    # ── 6. Fix Kconfig for non-GKI 4.4 ────────────────────────────────────────
-    - name: Patch Kconfig KPROBES dependency
-      working-directory: kernel_source
-      run: |
-        sed -i 's/depends on KPROBES && EXT4_FS/depends on EXT4_FS/' \
-          drivers/kernelsu/Kconfig
-        grep "depends on" drivers/kernelsu/Kconfig | head -3
-        echo "✅ KPROBES dependency removed"
-    # ── 6.5 Apply SukiSU 4.4 Compat Fixes ──────────────────────────────────────
-    - name: Apply SukiSU 4.4 Compat Fixes
+
+    # ── 6. Apply ReSukiSU 4.4 Compat Fixes ─────────────────────────────────────
+    - name: Apply ReSukiSU 4.4 Compat Fixes
       working-directory: kernel_source
       run: python3 ${{ env.PATCHES }}/sukisu_compat_fix.py
 
-    # ── 6.6 Apply Manual KSU Hooks ─────────────────────────────────────────────
+    # ── 6.5 Apply Manual KSU Hooks ─────────────────────────────────────────────
     - name: Apply Manual KSU Hooks
       working-directory: kernel_source
       run: python3 ${{ env.PATCHES }}/manual_hooks.py
@@ -89,9 +86,14 @@ jobs:
       working-directory: kernel_source
       run: |
         cat >> arch/arm64/configs/n950x_defconfig << 'EOF'
-        # SukiSU-Ultra
+        # ReSukiSU Manual Hooks Configuration
         CONFIG_KSU=y
+        CONFIG_KSU_MANUAL_HOOK=y
+        CONFIG_KSU_MANUAL_HOOK_AUTO_SETUID_HOOK=y
+        CONFIG_KSU_MANUAL_HOOK_AUTO_INITRC_HOOK=y
+        CONFIG_KSU_MANUAL_HOOK_AUTO_INPUT_HOOK=y
         CONFIG_KALLSYMS_ALL=y
+
         # Disable Samsung security — required for syscall table patching
         CONFIG_UH=n
         CONFIG_UH_RKP=n
@@ -107,6 +109,7 @@ jobs:
         CONFIG_KDP=n
         EOF
         echo "✅ n950x_defconfig updated"
+
     # ── 8. Build ───────────────────────────────────────────────────────────────
     - name: Build Kernel
       working-directory: kernel_source
@@ -120,6 +123,7 @@ jobs:
           && echo "✅ CONFIG_KSU=y in final config" \
           || echo "⚠️  CONFIG_KSU not in final config"
         make -j$(nproc) ARCH=arm64 CROSS_COMPILE=$CROSS_COMPILE 2>&1 | tee build.log || true
+
     # ── 9. Grab Image ──────────────────────────────────────────────────────────
     - name: Grab Kernel Image
       if: always()
@@ -134,6 +138,7 @@ jobs:
           echo "❌ Image not found — check build.log artifact"
           echo "image_found=false" >> $GITHUB_OUTPUT
         fi
+
     - name: Upload to GoFile
       if: always() && steps.package.outputs.image_found == 'true'
       run: |
@@ -146,11 +151,12 @@ jobs:
         echo "✅ Image → $(echo $RESP | python3 -c \
           "import sys,json; d=json.load(sys.stdin); \
            print(d['data']['downloadPage'])")"
+
     - name: Upload Artifacts
       if: always()
       uses: actions/upload-artifact@v4
       with:
-        name: Note8-SukiSU-Ultra
+        name: Note8-ReSukiSU
         path: |
           ${{ steps.package.outputs.image }}
           kernel_source/build.log
