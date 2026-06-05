@@ -31,7 +31,7 @@ jobs:
     # ── 3. Clone Kernel Source ─────────────────────────────────────────────────
     - name: Clone Kernel Source
       run: |
-        git clone --depth=1 -b 10 https://github.com/corsicanu/android_kernel_samsung_universal8895 \
+        git clone --depth=1 -b 10 https://github.com/ace2nutzer/Samsung_dreamlte_Kernel \
           kernel_source
 
     # ── 4. Download Toolchain ──────────────────────────────────────────────────
