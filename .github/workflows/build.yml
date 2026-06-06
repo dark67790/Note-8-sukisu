@@ -84,38 +84,41 @@ jobs:
       working-directory: kernel_source
       run: |
         SUSFS_BASE="https://gitlab.com/simonpunk/susfs4ksu/-/raw/kernel-4.9/kernel_patches"
-        export TMPDIR=/tmp/susfs_patches
-        mkdir -p $TMPDIR
+        mkdir -p /tmp/susfs_patches
 
-        # Download the main combined patch
         echo "⬇️  Fetching 50_add_susfs_in_kernel-4.9.patch"
-        wget -q "$SUSFS_BASE/50_add_susfs_in_kernel-4.9.patch" -O $TMPDIR/susfs.patch \
+        wget -q "$SUSFS_BASE/50_add_susfs_in_kernel-4.9.patch" \
+          -O /tmp/susfs_patches/susfs.patch \
           && echo "✅ susfs.patch" || echo "⚠️  susfs.patch not found"
 
-        # Fetch the SUSFS core source files that go into fs/
-        SUSFS_FS="https://gitlab.com/simonpunk/susfs4ksu/-/raw/kernel-4.9/kernel_patches/fs"
-        mkdir -p /tmp/susfs_fs
-        for f in susfs.c susfs.h; do
-          wget -q "$SUSFS_FS/$f" -O "/tmp/susfs_fs/$f" \
-            && echo "✅ fs/$f" || echo "⚠️  fs/$f not found"
-        done
-        [ -f /tmp/susfs_fs/susfs.c ] && cp /tmp/susfs_fs/susfs.c fs/susfs.c || true
-        [ -f /tmp/susfs_fs/susfs.h ] && cp /tmp/susfs_fs/susfs.h include/linux/susfs.h || true
+        echo "⬇️  Fetching susfs.c"
+        wget -q "$SUSFS_BASE/fs/susfs.c" -O fs/susfs.c \
+          && echo "✅ susfs.c" || echo "⚠️  susfs.c not found"
 
-        # Fetch susfs_def.h
+        echo "⬇️  Fetching susfs.h"
+        wget -q "$SUSFS_BASE/include/linux/susfs.h" -O include/linux/susfs.h \
+          && echo "✅ susfs.h" || echo "⚠️  susfs.h not found"
+
         echo "⬇️  Fetching susfs_def.h"
         wget -q "$SUSFS_BASE/include/linux/susfs_def.h" -O include/linux/susfs_def.h \
-          && echo "✅ include/linux/susfs_def.h" || echo "⚠️  susfs_def.h not found"
+          && echo "✅ susfs_def.h" || echo "⚠️  susfs_def.h not found"
 
-        # Apply the combined patch — continue on reject, we fix them in the next step
-        if [ -f "$TMPDIR/susfs.patch" ]; then
-          echo "=== Applying susfs.patch ==="
+        if [ -f /tmp/susfs_patches/susfs.patch ]; then
+          SIZE=$(wc -c < /tmp/susfs_patches/susfs.patch)
+          if [ "$SIZE" -lt 1024 ]; then
+            echo "❌ susfs.patch too small (${SIZE} bytes) — likely 404"
+            exit 1
+          fi
+          echo "=== Applying susfs.patch (${SIZE} bytes) ==="
           patch -p1 \
-            --reject-file="/tmp/susfs.patch.rej" \
+            --reject-file=/tmp/susfs.patch.rej \
             --no-backup-if-mismatch \
-            < "$TMPDIR/susfs.patch" \
+            < /tmp/susfs_patches/susfs.patch \
             && echo "✅ susfs.patch applied clean" \
-            || echo "⚠️  susfs.patch had rejects — will fix"
+            || echo "⚠️  susfs.patch had rejects — fixing in next step"
+        else
+          echo "❌ susfs.patch not found"
+          exit 1
         fi
 
         echo ""
@@ -124,7 +127,7 @@ jobs:
           echo "--- $r ---"
           cat "$r"
           echo ""
-        done || echo "No rejects found"
+        done || echo "No rejects"
 
     # ── 10. Apply SUSFS 4.4 Samsung Fixups ────────────────────────────────────
     - name: Apply SUSFS 4.4 Samsung Fixups
@@ -135,7 +138,8 @@ jobs:
     - name: Set Kernel Config
       working-directory: kernel_source
       run: |
-        sed -i 's/int selinux_enforcing = 0;/int selinux_enforcing = 1;/g' security/selinux/hooks.c
+        sed -i 's/int selinux_enforcing = 0;/int selinux_enforcing = 1;/g' \
+          security/selinux/hooks.c
         echo "✅ Patched hooks.c to Enforcing"
 
         cat >> arch/arm64/configs/n950x_defconfig << 'EOF'
@@ -171,6 +175,8 @@ jobs:
         CONFIG_KSU_SUSFS_AUTO_ADD_TRY_UMOUNT_FOR_BIND_MOUNT=y
         CONFIG_KSU_SUSFS_SPOOF_CMDLINE_OR_BOOTCONFIG=n
         EOF
+        # Strip yaml heredoc indentation — merge_config.sh needs ^CONFIG_ lines
+        sed -i 's/^[[:space:]]*\(CONFIG_\)/\1/' arch/arm64/configs/n950x_defconfig
         echo "✅ n950x_defconfig updated"
 
     # ── 12. Build ──────────────────────────────────────────────────────────────
@@ -183,11 +189,11 @@ jobs:
           arch/arm64/configs/g950x_defconfig \
           arch/arm64/configs/n950x_defconfig
         grep "CONFIG_KSU=y" .config \
-          && echo "✅ CONFIG_KSU=y in final config" \
-          || echo "⚠️  CONFIG_KSU not in final config"
+          && echo "✅ CONFIG_KSU=y" || echo "⚠️  CONFIG_KSU not set"
+        grep "CONFIG_KSU_MANUAL_HOOK=y" .config \
+          && echo "✅ CONFIG_KSU_MANUAL_HOOK=y" || echo "❌ CONFIG_KSU_MANUAL_HOOK not set"
         grep "CONFIG_KSU_SUSFS=y" .config \
-          && echo "✅ CONFIG_KSU_SUSFS=y in final config" \
-          || echo "⚠️  CONFIG_KSU_SUSFS not in final config"
+          && echo "✅ CONFIG_KSU_SUSFS=y" || echo "⚠️  CONFIG_KSU_SUSFS not set"
         make -j$(nproc) ARCH=arm64 CROSS_COMPILE=$CROSS_COMPILE 2>&1 | tee build.log || true
 
     # ── 13. Grab Image ─────────────────────────────────────────────────────────
@@ -201,7 +207,7 @@ jobs:
           echo "image=$IMAGE"      >> $GITHUB_OUTPUT
           echo "image_found=true"  >> $GITHUB_OUTPUT
         else
-          echo "❌ Image not found — check build.log artifact"
+          echo "❌ Image not found — check build.log"
           echo "image_found=false" >> $GITHUB_OUTPUT
         fi
 
@@ -250,12 +256,11 @@ jobs:
         echo "$ERRORS error(s) found"
         grep "error:" kernel_source/build.log | head -60 || true
         echo ""
-        echo "=== First 10 warnings ==="
+        echo "=== Warnings (first 10) ==="
         grep "warning:" kernel_source/build.log | head -10 || true
         echo ""
-        echo "=== SUSFS reject files from patch step ==="
+        echo "=== SUSFS rejects ==="
         find /tmp -name "*.rej" 2>/dev/null | while read r; do
           echo "--- $r ---"
           cat "$r"
         done || true
-
