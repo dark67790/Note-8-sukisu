@@ -373,6 +373,16 @@ fix('fs/namespace.c',
     '\tnew = copy_tree(old, old->mnt.mnt_root, copy_flags);',
     'namespace.c: copy_mnt_ns CL_COPY_MNT_NS flags')
 
+# ── fs/notify/fdinfo.c ────────────────────────────────────────────────────────
+print("\n── fs/notify/fdinfo.c ───────────────────────────────────────────────")
+
+# SUSFS hunk applied with fuzz 2 and commented out the mask declaration
+# but left it referenced in seq_printf — just restore it
+fix('fs/notify/fdinfo.c',
+    '//u32 mask = mark->mask & IN_ALL_EVENTS;',
+    'u32 mask = mark->mask & IN_ALL_EVENTS;',
+    'fdinfo.c: restore mask declaration (SUSFS fuzz mangled it)')
+
 # ── fs/proc/cmdline.c — SKIP ──────────────────────────────────────────────────
 print("\n── fs/proc/cmdline.c — SKIP (Samsung custom impl) ───────────────────")
 
@@ -390,36 +400,26 @@ fix('fs/proc/task_mmu.c',
 # ── fs/readdir.c ──────────────────────────────────────────────────────────────
 print("\n── fs/readdir.c ─────────────────────────────────────────────────────")
 
-fix('fs/readdir.c',
-    '\tint reclen = ALIGN(offsetof(struct linux_dirent, d_name) + namlen + 2,\n'
-    '\t\t\tsizeof(long));\n\n'
-    '\tbuf->error = -EINVAL;\t/* only used if we fail.. */\n'
-    '\tif (reclen > buf->count)',
-    '\tint reclen = ALIGN(offsetof(struct linux_dirent, d_name) + namlen + 2,\n'
-    '\t\t\tsizeof(long));\n\n'
-    '#ifdef CONFIG_KSU_SUSFS_SUS_PATH\n'
-    '\tif (likely(current->susfs_task_state & TASK_STRUCT_NON_ROOT_USER_APP_PROC) && susfs_sus_ino_for_filldir64(ino)) {\n'
-    '\t\treturn 0;\n'
-    '\t}\n'
-    '#endif\n'
-    '\tbuf->error = -EINVAL;\t/* only used if we fail.. */\n'
-    '\tif (reclen > buf->count)',
+fix_regex('fs/readdir.c',
+    r'(int reclen = ALIGN\(offsetof\(struct linux_dirent, d_name\) \+ namlen \+ 2,\n\s+sizeof\(long\)\);\n\n)(\s+buf->error = -EINVAL;)',
+    r'\1'
+    r'#ifdef CONFIG_KSU_SUSFS_SUS_PATH\n'
+    r'\tif (likely(current->susfs_task_state & TASK_STRUCT_NON_ROOT_USER_APP_PROC) && susfs_sus_ino_for_filldir64(ino)) {\n'
+    r'\t\treturn 0;\n'
+    r'\t}\n'
+    r'#endif\n'
+    r'\2',
     'readdir.c: filldir sus_path ino check')
 
-fix('fs/readdir.c',
-    '\tint reclen = ALIGN(offsetof(struct linux_dirent64, d_name) + namlen + 1,\n'
-    '\t\t\tsizeof(u64));\n\n'
-    '\tbuf->error = -EINVAL;\t/* only used if we fail.. */\n'
-    '\tif (reclen > buf->count)',
-    '\tint reclen = ALIGN(offsetof(struct linux_dirent64, d_name) + namlen + 1,\n'
-    '\t\t\tsizeof(u64));\n\n'
-    '#ifdef CONFIG_KSU_SUSFS_SUS_PATH\n'
-    '\tif (likely(current->susfs_task_state & TASK_STRUCT_NON_ROOT_USER_APP_PROC) && susfs_sus_ino_for_filldir64(ino)) {\n'
-    '\t\treturn 0;\n'
-    '\t}\n'
-    '#endif\n'
-    '\tbuf->error = -EINVAL;\t/* only used if we fail.. */\n'
-    '\tif (reclen > buf->count)',
+fix_regex('fs/readdir.c',
+    r'(int reclen = ALIGN\(offsetof\(struct linux_dirent64, d_name\) \+ namlen \+ 1,\n\s+sizeof\(u64\)\);\n\n)(\s+buf->error = -EINVAL;)',
+    r'\1'
+    r'#ifdef CONFIG_KSU_SUSFS_SUS_PATH\n'
+    r'\tif (likely(current->susfs_task_state & TASK_STRUCT_NON_ROOT_USER_APP_PROC) && susfs_sus_ino_for_filldir64(ino)) {\n'
+    r'\t\treturn 0;\n'
+    r'\t}\n'
+    r'#endif\n'
+    r'\2',
     'readdir.c: filldir64 sus_path ino check')
 
 # ── kernel/sys.c ──────────────────────────────────────────────────────────────
