@@ -84,22 +84,15 @@ jobs:
       working-directory: kernel_source
       run: |
         SUSFS_BASE="https://gitlab.com/simonpunk/susfs4ksu/-/raw/kernel-4.9/kernel_patches"
-        mkdir -p /tmp/susfs_patches
+        export TMPDIR=/tmp/susfs_patches
+        mkdir -p $TMPDIR
 
-        # Download all patches — skip sus_su (kprobe-dependent, incompatible with manual hook mode)
-        for p in \
-          "add_sus_path.patch" \
-          "add_sus_mount.patch" \
-          "add_sus_kstat.patch" \
-          "add_try_umount.patch" \
-          "add_open_redirect.patch"
-        do
-          echo "⬇️  Fetching $p"
-          wget -q "$SUSFS_BASE/$p" -O "/tmp/susfs_patches/$p" \
-            && echo "✅ $p" || echo "⚠️  $p not found — skipping"
-        done
+        # Download the main combined patch
+        echo "⬇️  Fetching 50_add_susfs_in_kernel-4.9.patch"
+        wget -q "$SUSFS_BASE/50_add_susfs_in_kernel-4.9.patch" -O $TMPDIR/susfs.patch \
+          && echo "✅ susfs.patch" || echo "⚠️  susfs.patch not found"
 
-        # Also fetch the SUSFS core source files that go into fs/
+        # Fetch the SUSFS core source files that go into fs/
         SUSFS_FS="https://gitlab.com/simonpunk/susfs4ksu/-/raw/kernel-4.9/kernel_patches/fs"
         mkdir -p /tmp/susfs_fs
         for f in susfs.c susfs.h; do
@@ -109,24 +102,21 @@ jobs:
         [ -f /tmp/susfs_fs/susfs.c ] && cp /tmp/susfs_fs/susfs.c fs/susfs.c || true
         [ -f /tmp/susfs_fs/susfs.h ] && cp /tmp/susfs_fs/susfs.h include/linux/susfs.h || true
 
-        # Apply patches — continue on reject, we fix them in the next step
-        for p in \
-          add_sus_path.patch \
-          add_sus_mount.patch \
-          add_sus_kstat.patch \
-          add_try_umount.patch \
-          add_open_redirect.patch
-        do
-          if [ -f "/tmp/susfs_patches/$p" ]; then
-            echo "=== Applying $p ==="
-            patch -p1 \
-              --reject-file="/tmp/${p}.rej" \
-              --no-backup-if-mismatch \
-              < "/tmp/susfs_patches/$p" \
-              && echo "✅ $p applied clean" \
-              || echo "⚠️  $p had rejects — will fix"
-          fi
-        done
+        # Fetch susfs_def.h
+        echo "⬇️  Fetching susfs_def.h"
+        wget -q "$SUSFS_BASE/include/linux/susfs_def.h" -O include/linux/susfs_def.h \
+          && echo "✅ include/linux/susfs_def.h" || echo "⚠️  susfs_def.h not found"
+
+        # Apply the combined patch — continue on reject, we fix them in the next step
+        if [ -f "$TMPDIR/susfs.patch" ]; then
+          echo "=== Applying susfs.patch ==="
+          patch -p1 \
+            --reject-file="/tmp/susfs.patch.rej" \
+            --no-backup-if-mismatch \
+            < "$TMPDIR/susfs.patch" \
+            && echo "✅ susfs.patch applied clean" \
+            || echo "⚠️  susfs.patch had rejects — will fix"
+        fi
 
         echo ""
         echo "=== Reject summary ==="
@@ -176,6 +166,10 @@ jobs:
         CONFIG_KSU_SUSFS_OPEN_REDIRECT=y
         CONFIG_KSU_SUSFS_ENABLE_LOG=y
         CONFIG_KSU_SUSFS_SUS_SU=n
+        CONFIG_KSU_SUSFS_AUTO_ADD_SUS_KSU_DEFAULT_MOUNT=y
+        CONFIG_KSU_SUSFS_AUTO_ADD_SUS_BIND_MOUNT=y
+        CONFIG_KSU_SUSFS_AUTO_ADD_TRY_UMOUNT_FOR_BIND_MOUNT=y
+        CONFIG_KSU_SUSFS_SPOOF_CMDLINE_OR_BOOTCONFIG=n
         EOF
         echo "✅ n950x_defconfig updated"
 
