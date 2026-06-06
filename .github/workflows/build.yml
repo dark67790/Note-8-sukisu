@@ -189,15 +189,31 @@ jobs:
           arch/arm64/configs/g950x_defconfig \
           arch/arm64/configs/n950x_defconfig
 
-        # Force KSU manual hook configs directly into .config
-        # merge_config.sh may silently drop these — bypass it entirely
+        # Force all KSU + SUSFS configs into .config
         for cfg in \
           CONFIG_KSU_MANUAL_HOOK \
           CONFIG_KSU_MANUAL_HOOK_AUTO_SETUID_HOOK \
           CONFIG_KSU_MANUAL_HOOK_AUTO_INITRC_HOOK \
-          CONFIG_KSU_MANUAL_HOOK_AUTO_INPUT_HOOK; do
+          CONFIG_KSU_MANUAL_HOOK_AUTO_INPUT_HOOK \
+          CONFIG_KSU_SUSFS \
+          CONFIG_KSU_SUSFS_SUS_PATH \
+          CONFIG_KSU_SUSFS_SUS_MOUNT \
+          CONFIG_KSU_SUSFS_SUS_KSTAT \
+          CONFIG_KSU_SUSFS_TRY_UMOUNT \
+          CONFIG_KSU_SUSFS_SPOOF_UNAME \
+          CONFIG_KSU_SUSFS_OPEN_REDIRECT \
+          CONFIG_KSU_SUSFS_ENABLE_LOG \
+          CONFIG_KSU_SUSFS_AUTO_ADD_SUS_KSU_DEFAULT_MOUNT \
+          CONFIG_KSU_SUSFS_AUTO_ADD_SUS_BIND_MOUNT \
+          CONFIG_KSU_SUSFS_AUTO_ADD_TRY_UMOUNT_FOR_BIND_MOUNT; do
           sed -i "s/# ${cfg} is not set/${cfg}=y/" .config
           grep -q "^${cfg}=y" .config || echo "${cfg}=y" >> .config
+        done
+        
+        # Explicit disables
+        for cfg in CONFIG_KSU_SUSFS_SUS_SU CONFIG_KSU_SUSFS_SPOOF_CMDLINE_OR_BOOTCONFIG; do
+          sed -i "s/^${cfg}=y/# ${cfg} is not set/" .config
+          grep -q "^${cfg}" .config || echo "# ${cfg} is not set" >> .config
         done
 
         grep "CONFIG_KSU_MANUAL_HOOK=y" .config \
