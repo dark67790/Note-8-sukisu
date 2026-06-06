@@ -1,17 +1,6 @@
 #!/usr/bin/env python3
 # susfs_hunk_fix_note8.py — SUSFS kernel-4.9 → Samsung 4.4 compat fixes
 # Run from kernel_source/ after 50_add_susfs_in_kernel-4.9.patch applied
-#
-# Failure root causes per file:
-#   dcache.c    — Samsung 4.4 __d_lookup_rcu has different loop structure
-#   namei.c     — 11 hunks: may_create_in_sticky absent, HAS_UNMAPPED_ID
-#                 absent, may_o_create non-const, lookup_open restructured,
-#                 do_filp_open context before function differs
-#   namespace.c — RKP_NS_PROT ifdefs block anchor lines; Samsung extras
-#   cmdline.c   — Samsung uses updated_command_line, completely different
-#   task_mmu.c  — sched/mm.h replaces mm_inline.h as last include
-#   readdir.c   — verify_dirent_name absent in 4.4; buf->error = -EINVAL instead
-#   sys.c       — newuname uses copy_to_user directly, no memcpy+spoof pattern
 
 import re, os
 
@@ -46,42 +35,22 @@ def fix_regex(path, pattern, replacement, label):
         f.write(re.sub(pattern, replacement, s, count=1, flags=re.DOTALL))
     print(f"✅ {label}")
 
-# ─────────────────────────────────────────────────────────────────────────────
-# fs/dcache.c — hunk #2
-# Samsung 4.4 __d_lookup_rcu returns found dentry with *seqp=seq before NULL
-# SUSFS check goes just before that return point so sus_path dentrys continue
-# ─────────────────────────────────────────────────────────────────────────────
+# ── fs/dcache.c ───────────────────────────────────────────────────────────────
 print("── fs/dcache.c ──────────────────────────────────────────────────────")
 
-fix('fs/dcache.c',
-    '\t\t*seqp = seq;\n\t\treturn dentry;\n\t}\n\treturn NULL;\n}',
-    '\t\t\t/* susfs: hide sus_path from non-root user app processes */\n'
-    '#ifdef CONFIG_KSU_SUSFS_SUS_PATH\n'
-    '\t\t\tif (dentry->d_inode && unlikely(dentry->d_inode->i_state & INODE_STATE_SUS_PATH) && likely(current->susfs_task_state & TASK_STRUCT_NON_ROOT_USER_APP_PROC)) {\n'
-    '\t\t\t\tcontinue;\n'
-    '\t\t\t}\n'
-    '#endif\n'
-    '\t\t*seqp = seq;\n'
-    '\t\treturn dentry;\n'
-    '\t}\n'
-    '\treturn NULL;\n'
-    '}',
+fix_regex('fs/dcache.c',
+    r'(\*seqp = seq;\n)(\t+)(if \(!dentry_cmp\(dentry, str, hashlen_len\(hashlen\)\)\))\n(\t+)(return dentry;)',
+    r'\1\2\3 {\n'
+    r'#ifdef CONFIG_KSU_SUSFS_SUS_PATH\n'
+    r'\2\tif (dentry->d_inode && unlikely(dentry->d_inode->i_state & INODE_STATE_SUS_PATH) && likely(current->susfs_task_state & TASK_STRUCT_NON_ROOT_USER_APP_PROC)) {\n'
+    r'\2\t\tcontinue;\n'
+    r'\2\t}\n'
+    r'#endif\n'
+    r'\4\5\n'
+    r'\2}',
     'dcache.c: __d_lookup_rcu sus_path check')
 
-# ─────────────────────────────────────────────────────────────────────────────
-# fs/namei.c — 11 hunks
-# hunk #4  SKIP: may_create_in_sticky doesn't exist in Samsung 4.4
-# hunk #8  filename_lookup: restore_nameidata+putname anchor
-# hunk #9  may_delete: IS_APPEND+check_sticky anchor (no HAS_UNMAPPED_ID in 4.4)
-# hunk #10 may_create: audit_inode_child anchor
-# hunk #11 may_open: !inode + switch anchor
-# hunk #12 may_o_create: wraps security_path_mknod (no const on struct path)
-# hunk #13 lookup_open: cached positive dentry single-line goto
-# hunk #14 lookup_open: skip (atomic_open is direct return in Samsung 4.4)
-# hunk #15 lookup_open: after lookup_real IS_ERR check
-# hunk #16 do_filp_open: extern + fake_pathname var
-# hunk #17 do_filp_open: open_redirect logic before restore_nameidata
-# ─────────────────────────────────────────────────────────────────────────────
+# ── fs/namei.c ────────────────────────────────────────────────────────────────
 print("\n── fs/namei.c ───────────────────────────────────────────────────────")
 
 # hunk #8 — filename_lookup
@@ -106,8 +75,7 @@ fix('fs/namei.c',
     '/* Returns 0 and nd will be valid on success',
     'namei.c: filename_lookup sus_path check')
 
-# hunk #9 — may_delete
-# Samsung 4.4 lacks HAS_UNMAPPED_ID — that's why patch context didn't match
+# hunk #9 — may_delete (Samsung 4.4 lacks HAS_UNMAPPED_ID)
 fix('fs/namei.c',
     '\tif (IS_APPEND(dir))\n'
     '\t\treturn -EPERM;\n'
@@ -129,18 +97,16 @@ fix('fs/namei.c',
     '\t\treturn -EPERM;',
     'namei.c: may_delete sus_path check')
 
-# hunk #10 — may_create
+# hunk #10 — may_create (Samsung 4.4 has no struct user_namespace *s_user_ns)
 fix('fs/namei.c',
     'static inline int may_create(struct vfsmount *mnt, struct inode *dir, struct dentry *child)\n'
     '{\n'
-    '\tstruct user_namespace *s_user_ns;\n'
     '\taudit_inode_child(dir, child, AUDIT_TYPE_CHILD_CREATE);',
     'static inline int may_create(struct vfsmount *mnt, struct inode *dir, struct dentry *child)\n'
     '{\n'
     '#ifdef CONFIG_KSU_SUSFS_SUS_PATH\n'
     '\tint error;\n'
     '#endif\n'
-    '\tstruct user_namespace *s_user_ns;\n'
     '\taudit_inode_child(dir, child, AUDIT_TYPE_CHILD_CREATE);\n'
     '#ifdef CONFIG_KSU_SUSFS_SUS_PATH\n'
     '\tif (child->d_inode && unlikely(child->d_inode->i_state & INODE_STATE_SUS_PATH) && likely(current->susfs_task_state & TASK_STRUCT_NON_ROOT_USER_APP_PROC)) {\n'
@@ -171,8 +137,7 @@ fix('fs/namei.c',
     '\tswitch (inode->i_mode & S_IFMT) {',
     'namei.c: may_open sus_path check')
 
-# hunk #12 — may_o_create
-# Samsung 4.4: non-const struct path*, starts directly with int error = security_path_mknod
+# hunk #12 — may_o_create (non-const struct path, starts with int error = directly)
 fix('fs/namei.c',
     'static int may_o_create(struct path *dir, struct dentry *dentry, umode_t mode)\n'
     '{\n'
@@ -204,8 +169,6 @@ fix('fs/namei.c',
     'namei.c: may_o_create sus_path check')
 
 # hunk #13 — lookup_open cached positive dentry
-# Samsung 4.4 uses single-line `if (!need_lookup && dentry->d_inode) goto out_no_open;`
-# 4.9 used `if (dentry->d_inode) { ... goto out_no_open; }` (different test)
 fix('fs/namei.c',
     '\t/* Cached positive dentry: will open in f_op->open */\n'
     '\tif (!need_lookup && dentry->d_inode)\n'
@@ -221,10 +184,6 @@ fix('fs/namei.c',
     '\t\tgoto out_no_open;\n'
     '\t}',
     'namei.c: lookup_open cached dentry sus_path check')
-
-# hunk #14 — SKIP
-# Samsung 4.4 lookup_open does `return atomic_open(...)` directly
-# Cannot intercept return value without restructuring; not critical
 
 # hunk #15 — lookup_open after lookup_real
 fix('fs/namei.c',
@@ -248,41 +207,30 @@ fix('fs/namei.c',
     '\t/* Negative dentry',
     'namei.c: lookup_open lookup_real sus_path check')
 
-# hunks #16 + #17 — do_filp_open open_redirect
-# Samsung 4.4 do_filp_open body matches 4.9 exactly — fails only because
-# the context BEFORE the function (end of path_openat) differs
+# hunks #16+#17 — do_filp_open open_redirect
 fix('fs/namei.c',
-    'struct file *do_filp_open(int dfd, struct filename *pathname,\n'
-    '\t\t\tconst struct open_flags *op)\n'
-    '{\n'
-    '\tstruct nameidata nd;\n'
-    '\tint flags = op->lookup_flags;\n'
-    '\tstruct file *filp;\n'
-    '\n'
-    '\tset_nameidata(&nd, dfd, pathname);',
+    'struct file *do_filp_open(int dfd, struct filename *pathname,',
     '#ifdef CONFIG_KSU_SUSFS_OPEN_REDIRECT\n'
     'extern struct filename* susfs_get_redirected_path(unsigned long ino);\n'
-    '#endif\n'
-    '\n'
-    'struct file *do_filp_open(int dfd, struct filename *pathname,\n'
-    '\t\t\tconst struct open_flags *op)\n'
-    '{\n'
-    '\tstruct nameidata nd;\n'
-    '\tint flags = op->lookup_flags;\n'
-    '\tstruct file *filp;\n'
+    '#endif\n\n'
+    'struct file *do_filp_open(int dfd, struct filename *pathname,',
+    'namei.c: do_filp_open open_redirect extern')
+
+fix('fs/namei.c',
+    '\tset_nameidata(&nd, dfd, pathname);\n'
+    '\tfilp = path_openat(&nd, op, flags | LOOKUP_RCU);',
     '#ifdef CONFIG_KSU_SUSFS_OPEN_REDIRECT\n'
     '\tstruct filename *fake_pathname;\n'
-    '#endif\n'
-    '\n'
-    '\tset_nameidata(&nd, dfd, pathname);',
-    'namei.c: do_filp_open open_redirect extern + var')
+    '#endif\n\n'
+    '\tset_nameidata(&nd, dfd, pathname);\n'
+    '\tfilp = path_openat(&nd, op, flags | LOOKUP_RCU);',
+    'namei.c: do_filp_open fake_pathname var')
 
 fix('fs/namei.c',
     '\t\tfilp = path_openat(&nd, op, flags | LOOKUP_REVAL);\n'
     '\trestore_nameidata();\n'
     '\treturn filp;\n'
-    '}\n'
-    '\n'
+    '}\n\n'
     'struct file *do_file_open_root(',
     '\t\tfilp = path_openat(&nd, op, flags | LOOKUP_REVAL);\n'
     '#ifdef CONFIG_KSU_SUSFS_OPEN_REDIRECT\n'
@@ -305,47 +253,33 @@ fix('fs/namei.c',
     '#endif\n'
     '\trestore_nameidata();\n'
     '\treturn filp;\n'
-    '}\n'
-    '\n'
+    '}\n\n'
     'struct file *do_file_open_root(',
     'namei.c: do_filp_open open_redirect logic')
 
-# ─────────────────────────────────────────────────────────────────────────────
-# fs/namespace.c — 4 hunks
-# hunk #1  includes/externs: Samsung adds slub_def.h + fslog.h between
-#          task_work.h and pnode.h — anchor on pnode.h
-# hunk #9  clone_mnt: RKP_NS_PROT ifdefs broke context; alloc_vfsmnt call
-#          must be replaced with SUSFS conditional (alloc_vfsmnt now 3-arg)
-# hunk #12 do_mount: insert before dput_out label
-# hunk #14 copy_mnt_ns: RKP_NS_PROT ifdef around copy_tree broke context
-# ─────────────────────────────────────────────────────────────────────────────
+# ── fs/namespace.c ────────────────────────────────────────────────────────────
 print("\n── fs/namespace.c ───────────────────────────────────────────────────")
 
 # hunk #1 — includes and externs
 fix('fs/namespace.c',
     '#include "pnode.h"\n'
-    '#include "internal.h"\n'
-    '\n'
+    '#include "internal.h"\n\n'
     '/* Maximum number of mounts',
     '#if defined(CONFIG_KSU_SUSFS_SUS_MOUNT) || defined(CONFIG_KSU_SUSFS_TRY_UMOUNT)\n'
     '#include <linux/susfs_def.h>\n'
     '#endif\n'
     '#include "pnode.h"\n'
-    '#include "internal.h"\n'
-    '\n'
+    '#include "internal.h"\n\n'
     '#ifdef CONFIG_KSU_SUSFS_SUS_MOUNT\n'
     'extern bool susfs_is_current_ksu_domain(void);\n'
-    'extern bool susfs_is_current_zygote_domain(void);\n'
-    '\n'
+    'extern bool susfs_is_current_zygote_domain(void);\n\n'
     'static DEFINE_IDA(susfs_mnt_id_ida);\n'
     'static DEFINE_IDA(susfs_mnt_group_ida);\n'
     'static int susfs_mnt_id_start = DEFAULT_SUS_MNT_ID;\n'
-    'static int susfs_mnt_group_start = DEFAULT_SUS_MNT_GROUP_ID;\n'
-    '\n'
+    'static int susfs_mnt_group_start = DEFAULT_SUS_MNT_GROUP_ID;\n\n'
     '#define CL_ZYGOTE_COPY_MNT_NS BIT(24)\n'
     '#define CL_COPY_MNT_NS BIT(25)\n'
-    '#endif\n'
-    '\n'
+    '#endif\n\n'
     '#ifdef CONFIG_KSU_SUSFS_AUTO_ADD_SUS_KSU_DEFAULT_MOUNT\n'
     'extern void susfs_auto_add_sus_ksu_default_mount(const char __user *to_pathname);\n'
     'bool susfs_is_auto_add_sus_ksu_default_mount_enabled = true;\n'
@@ -357,22 +291,18 @@ fix('fs/namespace.c',
     '#ifdef CONFIG_KSU_SUSFS_AUTO_ADD_TRY_UMOUNT_FOR_BIND_MOUNT\n'
     'extern void susfs_auto_add_try_umount_for_bind_mount(struct path *path);\n'
     'bool susfs_is_auto_add_try_umount_for_bind_mount_enabled = true;\n'
-    '#endif\n'
-    '\n'
+    '#endif\n\n'
     '/* Maximum number of mounts',
-    'namespace.c: susfs includes and externs after pnode.h')
+    'namespace.c: susfs includes and externs')
 
-# hunk #9 — clone_mnt alloc_vfsmnt replacement
-# After succeeding hunks alloc_vfsmnt now takes (name, bool, int)
-# The single remaining 1-arg call is inside clone_mnt due to context mismatch
+# hunk #9 — clone_mnt alloc_vfsmnt
 fix('fs/namespace.c',
     '\tmnt = alloc_vfsmnt(old->mnt_devname);\n'
     '\tif (!mnt)\n'
     '\t\treturn ERR_PTR(-ENOMEM);',
     '#ifdef CONFIG_KSU_SUSFS_SUS_MOUNT\n'
     '\tbool is_current_ksu_domain = susfs_is_current_ksu_domain();\n'
-    '\tbool is_current_zygote_domain = susfs_is_current_zygote_domain();\n'
-    '\n'
+    '\tbool is_current_zygote_domain = susfs_is_current_zygote_domain();\n\n'
     '\tif (unlikely(is_current_ksu_domain)) {\n'
     '\t\tif (!(flag & CL_COPY_MNT_NS)) {\n'
     '\t\t\tmnt = alloc_vfsmnt(old->mnt_devname, true, 0);\n'
@@ -401,13 +331,12 @@ fix('fs/namespace.c',
     '\t\treturn ERR_PTR(-ENOMEM);',
     'namespace.c: clone_mnt SUSFS sus_mount alloc_vfsmnt')
 
-# hunk #12 — do_mount auto_add_sus_ksu_default_mount before dput_out
+# hunk #12 — do_mount (dput_out: is unique in file)
 fix('fs/namespace.c',
     'dput_out:\n'
     '\tpath_put(&path);\n'
     '\treturn retval;\n'
-    '}\n'
-    '\nstatic int',
+    '}',
     '#ifdef CONFIG_KSU_SUSFS_AUTO_ADD_SUS_KSU_DEFAULT_MOUNT\n'
     '\tif (!retval && susfs_is_auto_add_sus_ksu_default_mount_enabled &&\n'
     '\t\t\t(!(flags & (MS_REMOUNT | MS_BIND | MS_SHARED | MS_PRIVATE | MS_SLAVE | MS_UNBINDABLE)))) {\n'
@@ -419,12 +348,10 @@ fix('fs/namespace.c',
     'dput_out:\n'
     '\tpath_put(&path);\n'
     '\treturn retval;\n'
-    '}\n'
-    '\nstatic int',
+    '}',
     'namespace.c: do_mount auto_add_sus_ksu_default_mount')
 
-# hunk #14 — copy_mnt_ns CL_COPY_MNT_NS flag
-# Samsung 4.4 wraps copy_tree with RKP_NS_PROT — anchor on both branches
+# hunk #14 — copy_mnt_ns CL flags (RKP_NS_PROT wraps copy_tree)
 fix('fs/namespace.c',
     '\tif (user_ns != ns->user_ns)\n'
     '\t\tcopy_flags |= CL_SHARED_TO_SLAVE | CL_UNPRIVILEGED;\n'
@@ -446,20 +373,10 @@ fix('fs/namespace.c',
     '\tnew = copy_tree(old, old->mnt.mnt_root, copy_flags);',
     'namespace.c: copy_mnt_ns CL_COPY_MNT_NS flags')
 
-# ─────────────────────────────────────────────────────────────────────────────
-# fs/proc/cmdline.c — SKIP
-# Samsung 4.4 has completely custom cmdline.c using updated_command_line
-# and proc_cmdline_set() — incompatible with SUSFS SPOOF_CMDLINE hook.
-# Samsung already strips debug_level/odin_download/warranty_bit/verifiedbootstate.
-# Set CONFIG_KSU_SUSFS_SPOOF_CMDLINE_OR_BOOTCONFIG=n in defconfig.
-# ─────────────────────────────────────────────────────────────────────────────
-print("\n── fs/proc/cmdline.c — SKIP (Samsung custom impl, already spoofs) ───")
+# ── fs/proc/cmdline.c — SKIP ──────────────────────────────────────────────────
+print("\n── fs/proc/cmdline.c — SKIP (Samsung custom impl) ───────────────────")
 
-# ─────────────────────────────────────────────────────────────────────────────
-# fs/proc/task_mmu.c — hunk #1
-# Samsung 4.4 has sched/mm.h (Samsung backport) instead of mm_inline.h
-# as last include before asm/elf.h — anchor on asm/elf.h instead
-# ─────────────────────────────────────────────────────────────────────────────
+# ── fs/proc/task_mmu.c ────────────────────────────────────────────────────────
 print("\n── fs/proc/task_mmu.c ───────────────────────────────────────────────")
 
 fix('fs/proc/task_mmu.c',
@@ -470,59 +387,48 @@ fix('fs/proc/task_mmu.c',
     '#include <asm/elf.h>',
     'task_mmu.c: add susfs_def.h include')
 
-# ─────────────────────────────────────────────────────────────────────────────
-# fs/readdir.c — hunks #2 and #3
-# Samsung 4.4 lacks verify_dirent_name() — patch anchored on it, failed.
-# Actual code: buf->error = -EINVAL; Use that as anchor instead.
-# ─────────────────────────────────────────────────────────────────────────────
+# ── fs/readdir.c ──────────────────────────────────────────────────────────────
 print("\n── fs/readdir.c ─────────────────────────────────────────────────────")
 
-# hunk #2 — filldir (linux_dirent, 32-bit)
 fix('fs/readdir.c',
     '\tint reclen = ALIGN(offsetof(struct linux_dirent, d_name) + namlen + 2,\n'
-    '\t\t\tsizeof(long));\n'
-    '\n'
-    '\tbuf->error = -EINVAL;',
+    '\t\t\tsizeof(long));\n\n'
+    '\tbuf->error = -EINVAL;\t/* only used if we fail.. */\n'
+    '\tif (reclen > buf->count)',
     '\tint reclen = ALIGN(offsetof(struct linux_dirent, d_name) + namlen + 2,\n'
-    '\t\t\tsizeof(long));\n'
-    '\n'
+    '\t\t\tsizeof(long));\n\n'
     '#ifdef CONFIG_KSU_SUSFS_SUS_PATH\n'
     '\tif (likely(current->susfs_task_state & TASK_STRUCT_NON_ROOT_USER_APP_PROC) && susfs_sus_ino_for_filldir64(ino)) {\n'
     '\t\treturn 0;\n'
     '\t}\n'
     '#endif\n'
-    '\tbuf->error = -EINVAL;',
+    '\tbuf->error = -EINVAL;\t/* only used if we fail.. */\n'
+    '\tif (reclen > buf->count)',
     'readdir.c: filldir sus_path ino check')
 
-# hunk #3 — filldir64 (linux_dirent64, 64-bit)
 fix('fs/readdir.c',
     '\tint reclen = ALIGN(offsetof(struct linux_dirent64, d_name) + namlen + 1,\n'
-    '\t\t\tsizeof(u64));\n'
-    '\n'
-    '\tbuf->error = -EINVAL;',
+    '\t\t\tsizeof(u64));\n\n'
+    '\tbuf->error = -EINVAL;\t/* only used if we fail.. */\n'
+    '\tif (reclen > buf->count)',
     '\tint reclen = ALIGN(offsetof(struct linux_dirent64, d_name) + namlen + 1,\n'
-    '\t\t\tsizeof(u64));\n'
-    '\n'
+    '\t\t\tsizeof(u64));\n\n'
     '#ifdef CONFIG_KSU_SUSFS_SUS_PATH\n'
     '\tif (likely(current->susfs_task_state & TASK_STRUCT_NON_ROOT_USER_APP_PROC) && susfs_sus_ino_for_filldir64(ino)) {\n'
     '\t\treturn 0;\n'
     '\t}\n'
     '#endif\n'
-    '\tbuf->error = -EINVAL;',
+    '\tbuf->error = -EINVAL;\t/* only used if we fail.. */\n'
+    '\tif (reclen > buf->count)',
     'readdir.c: filldir64 sus_path ino check')
 
-# ─────────────────────────────────────────────────────────────────────────────
-# kernel/sys.c — hunk #1
-# Samsung 4.4 newuname does copy_to_user directly without memcpy+tmp pattern.
-# Restructure to use tmp buffer so susfs_spoof_uname can modify before copy.
-# ─────────────────────────────────────────────────────────────────────────────
+# ── kernel/sys.c ──────────────────────────────────────────────────────────────
 print("\n── kernel/sys.c ─────────────────────────────────────────────────────")
 
 fix('kernel/sys.c',
     'SYSCALL_DEFINE1(newuname, struct new_utsname __user *, name)\n'
     '{\n'
-    '\tint errno = 0;\n'
-    '\n'
+    '\tint errno = 0;\n\n'
     '\tdown_read(&uts_sem);\n'
     '\tif (copy_to_user(name, utsname(), sizeof *name))\n'
     '\t\terrno = -EFAULT;\n'
@@ -535,8 +441,7 @@ fix('kernel/sys.c',
     '\tint errno = 0;\n'
     '#ifdef CONFIG_KSU_SUSFS_SPOOF_UNAME\n'
     '\tstruct new_utsname tmp;\n'
-    '#endif\n'
-    '\n'
+    '#endif\n\n'
     '\tdown_read(&uts_sem);\n'
     '#ifdef CONFIG_KSU_SUSFS_SPOOF_UNAME\n'
     '\tmemcpy(&tmp, utsname(), sizeof(tmp));\n'
