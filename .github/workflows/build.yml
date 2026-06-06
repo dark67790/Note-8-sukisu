@@ -188,12 +188,25 @@ jobs:
         ARCH=arm64 scripts/kconfig/merge_config.sh \
           arch/arm64/configs/g950x_defconfig \
           arch/arm64/configs/n950x_defconfig
-        grep "CONFIG_KSU=y" .config \
-          && echo "✅ CONFIG_KSU=y" || echo "⚠️  CONFIG_KSU not set"
+
+        # Force KSU manual hook configs directly into .config
+        # merge_config.sh may silently drop these — bypass it entirely
+        for cfg in \
+          CONFIG_KSU_MANUAL_HOOK \
+          CONFIG_KSU_MANUAL_HOOK_AUTO_SETUID_HOOK \
+          CONFIG_KSU_MANUAL_HOOK_AUTO_INITRC_HOOK \
+          CONFIG_KSU_MANUAL_HOOK_AUTO_INPUT_HOOK; do
+          sed -i "s/# ${cfg} is not set/${cfg}=y/" .config
+          grep -q "^${cfg}=y" .config || echo "${cfg}=y" >> .config
+        done
+
         grep "CONFIG_KSU_MANUAL_HOOK=y" .config \
-          && echo "✅ CONFIG_KSU_MANUAL_HOOK=y" || echo "❌ CONFIG_KSU_MANUAL_HOOK not set"
+          && echo "✅ CONFIG_KSU_MANUAL_HOOK=y confirmed" \
+          || echo "❌ still not set — check Kbuild"
         grep "CONFIG_KSU_SUSFS=y" .config \
-          && echo "✅ CONFIG_KSU_SUSFS=y" || echo "⚠️  CONFIG_KSU_SUSFS not set"
+          && echo "✅ CONFIG_KSU_SUSFS=y confirmed" \
+          || echo "⚠️  CONFIG_KSU_SUSFS not set"
+
         make -j$(nproc) ARCH=arm64 CROSS_COMPILE=$CROSS_COMPILE 2>&1 | tee build.log || true
 
     # ── 13. Grab Image ─────────────────────────────────────────────────────────
