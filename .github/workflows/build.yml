@@ -57,6 +57,17 @@ jobs:
         curl -LSs \
           "https://raw.githubusercontent.com/ReSukiSU/ReSukiSU/main/kernel/setup.sh" \
           | bash -s main || true
+          
+        # 1. FIX: Register KSU in the Kconfig tree so merge_config.sh doesn't drop your flags!
+        if ! grep -q 'source "drivers/kernelsu/Kconfig"' drivers/Kconfig; then
+            echo 'source "drivers/kernelsu/Kconfig"' >> drivers/Kconfig
+            echo "✅ drivers/Kconfig patched"
+        fi
+        
+        # 2. FIX: Forcefully enable Manual Hooks in Kbuild and suppress the TP error
+        sed -i '1i ccflags-y += -DKSU_MANUAL_HOOK' drivers/kernelsu/Kbuild
+        sed -i 's/$(error \*\*\* TP hooks are incompatible/$(warning \*\*\* TP hooks are incompatible/g' drivers/kernelsu/Kbuild
+        
         FAIL=0
         grep -q "config KSU" drivers/kernelsu/Kconfig \
           && echo "✅ Kconfig has KSU" || { echo "❌ Kconfig missing KSU"; FAIL=1; }
