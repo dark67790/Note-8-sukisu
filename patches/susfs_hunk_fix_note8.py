@@ -375,13 +375,20 @@ fix('fs/namespace.c',
 
 # ── fs/notify/fdinfo.c ────────────────────────────────────────────────────────
 print("\n── fs/notify/fdinfo.c ───────────────────────────────────────────────")
-
-# SUSFS hunk applied with fuzz 2 and commented out the mask declaration
-# but left it referenced in seq_printf — just restore it
-fix('fs/notify/fdinfo.c',
-    '//u32 mask = mark->mask & IN_ALL_EVENTS;',
-    'u32 mask = mark->mask & IN_ALL_EVENTS;',
-    'fdinfo.c: restore mask declaration (SUSFS fuzz mangled it)')
+# Can't use fix() here — 'u32 mask...' is a substring of '//u32 mask...'
+# so the already-applied check false-positives and skips the fix
+try:
+    with open('fs/notify/fdinfo.c', 'r') as f:
+        s = f.read()
+    target = '//u32 mask = mark->mask & IN_ALL_EVENTS;'
+    if target in s:
+        with open('fs/notify/fdinfo.c', 'w') as f:
+            f.write(s.replace(target, 'u32 mask = mark->mask & IN_ALL_EVENTS;', 1))
+        print('✅ fdinfo.c: restored mask declaration')
+    else:
+        print('⚠️  fdinfo.c: //u32 pattern not found')
+except FileNotFoundError:
+    print('⚠️  fdinfo.c: not found')
 
 # ── fs/proc/cmdline.c — SKIP ──────────────────────────────────────────────────
 print("\n── fs/proc/cmdline.c — SKIP (Samsung custom impl) ───────────────────")
