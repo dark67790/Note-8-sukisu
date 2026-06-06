@@ -57,6 +57,9 @@ jobs:
         curl -LSs \
           "https://raw.githubusercontent.com/ReSukiSU/ReSukiSU/main/kernel/setup.sh" \
           | bash -s main || true
+        sed -i 's/default KSU_TRACEPOINT_HOOK/default KSU_MANUAL_HOOK/' \
+          drivers/kernelsu/Kconfig
+        echo "✅ ReSukiSU default hook → MANUAL"
         FAIL=0
         grep -q "config KSU" drivers/kernelsu/Kconfig \
           && echo "✅ Kconfig has KSU" || { echo "❌ Kconfig missing KSU"; FAIL=1; }
