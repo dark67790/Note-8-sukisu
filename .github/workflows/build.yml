@@ -219,21 +219,12 @@ jobs:
           grep -q "^${cfg}" .config || echo "# ${cfg} is not set" >> .config
         done
 
-        # Let Kconfig process the forced values
-        make ARCH=arm64 olddefconfig
-
         grep "CONFIG_KSU_MANUAL_HOOK=y" .config \
           && echo "✅ CONFIG_KSU_MANUAL_HOOK=y confirmed" \
           || echo "❌ still not set — check Kbuild"
         grep "CONFIG_KSU_SUSFS=y" .config \
           && echo "✅ CONFIG_KSU_SUSFS=y confirmed" \
           || echo "⚠️  CONFIG_KSU_SUSFS not set"
-
-        echo "=== KSU entries in .config ==="
-        grep -E "KSU_MANUAL|KSU_SUSFS|^CONFIG_KSU=" .config | sort || echo "NONE FOUND"
-        echo ""
-        echo "=== ReSukiSU Kbuild hook detection (lines 155-175) ==="
-        sed -n '155,175p' drivers/kernelsu/Kbuild
 
         make -j$(nproc) ARCH=arm64 CROSS_COMPILE=$CROSS_COMPILE 2>&1 | tee build.log || true
 
