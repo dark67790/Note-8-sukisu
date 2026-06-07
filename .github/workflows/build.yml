@@ -57,9 +57,9 @@ jobs:
         curl -LSs \
           "https://raw.githubusercontent.com/ReSukiSU/ReSukiSU/main/kernel/setup.sh" \
           | bash -s main || true
-        sed -i 's/default KSU_TRACEPOINT_HOOK/default KSU_MANUAL_HOOK/' \
+        sed -i 's/default KSU_TRACEPOINT_HOOK/default KSU_SUSFS/' \
           drivers/kernelsu/Kconfig
-        echo "✅ ReSukiSU default hook → MANUAL"
+        echo "✅ ReSukiSU default hook → SUSFS"
         FAIL=0
         grep -q "config KSU" drivers/kernelsu/Kconfig \
           && echo "✅ Kconfig has KSU" || { echo "❌ Kconfig missing KSU"; FAIL=1; }
@@ -147,10 +147,6 @@ jobs:
 
         cat >> arch/arm64/configs/n950x_defconfig << 'EOF'
         CONFIG_KSU=y
-        CONFIG_KSU_MANUAL_HOOK=y
-        CONFIG_KSU_MANUAL_HOOK_AUTO_SETUID_HOOK=y
-        CONFIG_KSU_MANUAL_HOOK_AUTO_INITRC_HOOK=y
-        CONFIG_KSU_MANUAL_HOOK_AUTO_INPUT_HOOK=y
         CONFIG_KALLSYMS_ALL=y
         CONFIG_UH=n
         CONFIG_UH_RKP=n
@@ -194,10 +190,6 @@ jobs:
 
         # Force all KSU + SUSFS configs into .config
         for cfg in \
-          CONFIG_KSU_MANUAL_HOOK \
-          CONFIG_KSU_MANUAL_HOOK_AUTO_SETUID_HOOK \
-          CONFIG_KSU_MANUAL_HOOK_AUTO_INITRC_HOOK \
-          CONFIG_KSU_MANUAL_HOOK_AUTO_INPUT_HOOK \
           CONFIG_KSU_SUSFS \
           CONFIG_KSU_SUSFS_SUS_PATH \
           CONFIG_KSU_SUSFS_SUS_MOUNT \
@@ -214,14 +206,18 @@ jobs:
         done
         
         # Explicit disables
-        for cfg in CONFIG_KSU_SUSFS_SUS_SU CONFIG_KSU_SUSFS_SPOOF_CMDLINE_OR_BOOTCONFIG; do
+        for cfg in \
+          CONFIG_KSU_MANUAL_HOOK \
+          CONFIG_KSU_TRACEPOINT_HOOK \
+          CONFIG_KSU_MANUAL_HOOK_AUTO_SETUID_HOOK \
+          CONFIG_KSU_MANUAL_HOOK_AUTO_INITRC_HOOK \
+          CONFIG_KSU_MANUAL_HOOK_AUTO_INPUT_HOOK \
+          CONFIG_KSU_SUSFS_SUS_SU \
+          CONFIG_KSU_SUSFS_SPOOF_CMDLINE_OR_BOOTCONFIG; do
           sed -i "s/^${cfg}=y/# ${cfg} is not set/" .config
           grep -q "^${cfg}" .config || echo "# ${cfg} is not set" >> .config
         done
 
-        grep "CONFIG_KSU_MANUAL_HOOK=y" .config \
-          && echo "✅ CONFIG_KSU_MANUAL_HOOK=y confirmed" \
-          || echo "❌ still not set — check Kbuild"
         grep "CONFIG_KSU_SUSFS=y" .config \
           && echo "✅ CONFIG_KSU_SUSFS=y confirmed" \
           || echo "⚠️  CONFIG_KSU_SUSFS not set"
