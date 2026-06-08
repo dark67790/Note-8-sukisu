@@ -1,3 +1,4 @@
+
 name: Build Note8 Kernel (ReSukiSU + SUSFS)
 
 permissions:
@@ -209,9 +210,6 @@ jobs:
         for cfg in \
           CONFIG_KSU_MANUAL_HOOK \
           CONFIG_KSU_TRACEPOINT_HOOK \
-          CONFIG_KSU_MANUAL_HOOK_AUTO_SETUID_HOOK \
-          CONFIG_KSU_MANUAL_HOOK_AUTO_INITRC_HOOK \
-          CONFIG_KSU_MANUAL_HOOK_AUTO_INPUT_HOOK \
           CONFIG_KSU_SUSFS_SUS_SU \
           CONFIG_KSU_SUSFS_SPOOF_CMDLINE_OR_BOOTCONFIG; do
           sed -i "s/^${cfg}=y/# ${cfg} is not set/" .config
@@ -272,17 +270,17 @@ jobs:
           exit 0
         fi
         echo "=== SUSFS errors ==="
-        grep -n "susfs\|sus_path\|sus_mount\|sus_kstat" kernel_source/build.log \
-          | grep "error:" | head -30 || true
+        grep -nE "susfs\|sus_path\|sus_mount\|sus_kstat" kernel_source/build.log \
+          | grep -E "error:|Error [0-9]+|\*\*\*" | head -30 || true
         echo ""
         echo "=== KSU driver errors ==="
-        grep -n "kernelsu\|drivers/kernelsu" kernel_source/build.log \
-          | grep "error:" | head -30 || true
+        grep -nE "kernelsu\|drivers/kernelsu" kernel_source/build.log \
+          | grep -E "error:|Error [0-9]+|\*\*\*" | head -30 || true
         echo ""
         echo "=== All errors ==="
-        ERRORS=$(grep -c "error:" kernel_source/build.log 2>/dev/null || echo 0)
+        ERRORS=$(grep -cE "error:|Error [0-9]+|\*\*\*" kernel_source/build.log 2>/dev/null || echo 0)
         echo "$ERRORS error(s) found"
-        grep "error:" kernel_source/build.log | head -60 || true
+        grep -E "error:|Error [0-9]+|\*\*\*" kernel_source/build.log | head -60 || true
         echo ""
         echo "=== Warnings (first 10) ==="
         grep "warning:" kernel_source/build.log | head -10 || true
