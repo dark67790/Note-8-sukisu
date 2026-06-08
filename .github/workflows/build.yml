@@ -57,8 +57,16 @@ jobs:
         curl -LSs \
           "https://raw.githubusercontent.com/ReSukiSU/ReSukiSU/main/kernel/setup.sh" \
           | bash -s main || true
+
+        echo "=== Kconfig default BEFORE sed ==="
+        grep -n "default KSU" drivers/kernelsu/Kconfig
+
         sed -i 's/default KSU_TRACEPOINT_HOOK/default KSU_SUSFS/' \
           drivers/kernelsu/Kconfig
+
+        echo "=== Kconfig default AFTER sed ==="
+        grep -n "default KSU" drivers/kernelsu/Kconfig
+
         echo "✅ ReSukiSU default hook → SUSFS"
         FAIL=0
         grep -q "config KSU" drivers/kernelsu/Kconfig \
@@ -222,6 +230,13 @@ jobs:
         grep "CONFIG_KSU_SUSFS=y" .config \
           && echo "✅ CONFIG_KSU_SUSFS=y confirmed" \
           || echo "⚠️  CONFIG_KSU_SUSFS not set"
+
+        # Let Kconfig properly process the choice with our values
+        make ARCH=arm64 olddefconfig 2>&1 | grep -E "KSU|warning|error" || true
+
+        echo "=== Hook choice in .config after olddefconfig ==="
+        grep -E "CONFIG_KSU_SUSFS=|CONFIG_KSU_MANUAL_HOOK|CONFIG_KSU_TRACEPOINT" .config \
+          | grep -v "_SUS_PATH\|_SUS_MOUNT\|_SUS_KSTAT\|_TRY_\|_SPOOF\|_ENABLE\|_AUTO\|_OPEN\|_SUS_SU"
 
         make -j$(nproc) ARCH=arm64 CROSS_COMPILE=$CROSS_COMPILE 2>&1 | tee build.log || true
 
