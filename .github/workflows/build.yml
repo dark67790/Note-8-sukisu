@@ -1,3 +1,4 @@
+
 name: Build Note8 Kernel (ReSukiSU + SUSFS)
 
 permissions:
@@ -99,7 +100,6 @@ jobs:
     - name: Apply SUSFS Patches
       working-directory: kernel_source
       run: |
-        # Corrected back to kernel-4.9 so downloads complete without 404 errors
         SUSFS_BASE="https://gitlab.com/simonpunk/susfs4ksu/-/raw/kernel-4.9/kernel_patches"
         mkdir -p /tmp/susfs_patches
 
@@ -120,7 +120,7 @@ jobs:
         wget -q "$SUSFS_BASE/include/linux/susfs_def.h" -O include/linux/susfs_def.h \
           && echo "✅ susfs_def.h" || echo "⚠️  susfs_def.h not found"
 
-        # ── Fix for Kernel 4.4 missing bits.h ──
+        # Fix for Kernel 4.4 missing bits.h
         sed -i 's/linux\/bits.h/linux\/bitops.h/g' include/linux/susfs_def.h
         echo "✅ Patched bits.h -> bitops.h for 4.4 compatibility"
 
@@ -141,14 +141,6 @@ jobs:
           echo "❌ susfs.patch not found"
           exit 1
         fi
-
-        echo ""
-        echo "=== Reject summary ==="
-        find /tmp -name "*.rej" 2>/dev/null | while read r; do
-          echo "--- $r ---"
-          cat "$r"
-          echo ""
-        done || echo "No rejects"
 
     # ── 10. Apply SUSFS 4.4 Samsung Fixups ────────────────────────────────────
     - name: Apply SUSFS 4.4 Samsung Fixups
@@ -179,20 +171,19 @@ jobs:
         CONFIG_KDP_NS=n
         CONFIG_KDP=n
         CONFIG_KSU_SUSFS=y
-        CONFIG_KSU_SUSFS_SUS_PATH=y
         CONFIG_KSU_SUSFS_SUS_MOUNT=y
         CONFIG_KSU_SUSFS_SUS_KSTAT=y
         CONFIG_KSU_SUSFS_TRY_UMOUNT=y
         CONFIG_KSU_SUSFS_SPOOF_UNAME=y
-        CONFIG_KSU_SUSFS_OPEN_REDIRECT=y
         CONFIG_KSU_SUSFS_ENABLE_LOG=y
-        CONFIG_KSU_SUSFS_SUS_SU=n
         CONFIG_KSU_SUSFS_AUTO_ADD_SUS_KSU_DEFAULT_MOUNT=y
         CONFIG_KSU_SUSFS_AUTO_ADD_SUS_BIND_MOUNT=y
         CONFIG_KSU_SUSFS_AUTO_ADD_TRY_UMOUNT_FOR_BIND_MOUNT=y
+        CONFIG_KSU_SUSFS_SUS_PATH=n
+        CONFIG_KSU_SUSFS_OPEN_REDIRECT=n
+        CONFIG_KSU_SUSFS_SUS_SU=n
         CONFIG_KSU_SUSFS_SPOOF_CMDLINE_OR_BOOTCONFIG=n
         EOF
-        # Strip yaml heredoc indentation — merge_config.sh needs ^CONFIG_ lines
         sed -i 's/^[[:space:]]*\(CONFIG_\)/\1/' arch/arm64/configs/n950x_defconfig
         echo "✅ n950x_defconfig updated"
 
@@ -206,19 +197,16 @@ jobs:
           arch/arm64/configs/g950x_defconfig \
           arch/arm64/configs/n950x_defconfig
 
-        # Remove conflicting hook entries entirely — let KSU_SUSFS be the only one
         sed -i '/CONFIG_KSU_TRACEPOINT_HOOK\|CONFIG_KSU_MANUAL_HOOK/d' .config
         echo "✅ Cleared hook choice conflicts from .config"
 
-        # Force all KSU + SUSFS configs into .config
+        # Force valid SUSFS features
         for cfg in \
           CONFIG_KSU_SUSFS \
-          CONFIG_KSU_SUSFS_SUS_PATH \
           CONFIG_KSU_SUSFS_SUS_MOUNT \
           CONFIG_KSU_SUSFS_SUS_KSTAT \
           CONFIG_KSU_SUSFS_TRY_UMOUNT \
           CONFIG_KSU_SUSFS_SPOOF_UNAME \
-          CONFIG_KSU_SUSFS_OPEN_REDIRECT \
           CONFIG_KSU_SUSFS_ENABLE_LOG \
           CONFIG_KSU_SUSFS_AUTO_ADD_SUS_KSU_DEFAULT_MOUNT \
           CONFIG_KSU_SUSFS_AUTO_ADD_SUS_BIND_MOUNT \
@@ -227,12 +215,14 @@ jobs:
           grep -q "^${cfg}=y" .config || echo "${cfg}=y" >> .config
         done
         
-        # Explicit disables
+        # Explicitly disable incompatible features causing VFS architectural compilation failures
         for cfg in \
           CONFIG_KSU_MANUAL_HOOK \
           CONFIG_KSU_TRACEPOINT_HOOK \
           CONFIG_KSU_SUSFS_SUS_SU \
-          CONFIG_KSU_SUSFS_SPOOF_CMDLINE_OR_BOOTCONFIG; do
+          CONFIG_KSU_SUSFS_SPOOF_CMDLINE_OR_BOOTCONFIG \
+          CONFIG_KSU_SUSFS_SUS_PATH \
+          CONFIG_KSU_SUSFS_OPEN_REDIRECT; do
           sed -i "s/^${cfg}=y/# ${cfg} is not set/" .config
           grep -q "^${cfg}" .config || echo "# ${cfg} is not set" >> .config
         done
@@ -241,12 +231,7 @@ jobs:
           && echo "✅ CONFIG_KSU_SUSFS=y confirmed" \
           || echo "⚠️  CONFIG_KSU_SUSFS not set"
 
-        # Let Kconfig properly process the choice with our values
         make ARCH=arm64 olddefconfig 2>&1 | grep -E "KSU|warning|error" || true
-
-        echo "=== Hook choice in .config after olddefconfig ==="
-        grep -E "CONFIG_KSU_SUSFS=|CONFIG_KSU_MANUAL_HOOK|CONFIG_KSU_TRACEPOINT" .config \
-          | grep -v "_SUS_PATH\|_SUS_MOUNT\|_SUS_KSTAT\|_TRY_\|_SPOOF\|_ENABLE\|_AUTO\|_OPEN\|_SUS_SU"
 
         make -j$(nproc) ARCH=arm64 CROSS_COMPILE=$CROSS_COMPILE 2>&1 | tee build.log || true
 
@@ -297,24 +282,7 @@ jobs:
           echo "No build log found"
           exit 0
         fi
-        echo "=== SUSFS errors ==="
-        grep -nE "susfs\|sus_path\|sus_mount\|sus_kstat" kernel_source/build.log \
-          | grep -E "error:|Error [0-9]+|\*\*\*" | head -30 || true
-        echo ""
-        echo "=== KSU driver errors ==="
-        grep -nE "kernelsu\|drivers/kernelsu" kernel_source/build.log \
-          | grep -E "error:|Error [0-9]+|\*\*\*" | head -30 || true
-        echo ""
         echo "=== All errors ==="
         ERRORS=$(grep -cE "error:|Error [0-9]+|\*\*\*" kernel_source/build.log 2>/dev/null || echo 0)
         echo "$ERRORS error(s) found"
         grep -E "error:|Error [0-9]+|\*\*\*" kernel_source/build.log | head -60 || true
-        echo ""
-        echo "=== Warnings (first 10) ==="
-        grep "warning:" kernel_source/build.log | head -10 || true
-        echo ""
-        echo "=== SUSFS rejects ==="
-        find /tmp -name "*.rej" 2>/dev/null | while read r; do
-          echo "--- $r ---"
-          cat "$r"
-        done || true
