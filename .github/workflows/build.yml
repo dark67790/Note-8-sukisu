@@ -153,10 +153,11 @@ jobs:
         echo "🛠️ Injecting SUSFS v1.5+ Compatibility Stubs into ReSukiSU dispatch layer"
         python3 -c '
         import os
-        path = "drivers/kernelsu/supercall/dispatch.c"
-        if os.path.exists(path):
-            with open(path, "r") as f:
-                code = f.read()
+        
+        # 1. Fix dispatch.c
+        path_dispatch = "drivers/kernelsu/supercall/dispatch.c"
+        if os.path.exists(path_dispatch):
+            with open(path_dispatch, "r") as f: code = f.read()
             stubs = """
         // SUSFS v1.5+ Compatibility stubs injected by build workflow
         #include <linux/types.h>
@@ -170,9 +171,21 @@ jobs:
         static inline int susfs_enable_avc_log_spoofing(unsigned long arg) { return 0; }
         static int susfs_is_avc_log_spoofing_enabled = 0;
         """
-            with open(path, "w") as f:
-                f.write(stubs + code)
-            print("✅ Compatibility layer injected successfully")
+            with open(path_dispatch, "w") as f: f.write(stubs + code)
+            print("✅ dispatch.c compatibility stubs injected")
+
+        # 2. Fix supercall.c (Missing SUSFS_MAGIC)
+        path_supercall = "drivers/kernelsu/supercall/supercall.c"
+        if os.path.exists(path_supercall):
+            with open(path_supercall, "r") as f: code2 = f.read()
+            stubs2 = """
+        // SUSFS v1.5+ Magic Number
+        #ifndef SUSFS_MAGIC
+        #define SUSFS_MAGIC 0xFAFAFAFA
+        #endif
+        """
+            with open(path_supercall, "w") as f: f.write(stubs2 + code2)
+            print("✅ supercall.c SUSFS_MAGIC injected")
         '
 
     # ── 11. Kernel Config ──────────────────────────────────────────────────────
