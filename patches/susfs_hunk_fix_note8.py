@@ -38,13 +38,14 @@ def fix_regex(path, pattern, replacement, label):
 # ── fs/dcache.c ───────────────────────────────────────────────────────────────
 print("── fs/dcache.c ──────────────────────────────────────────────────────")
 
+# Simpler pattern using [^\n]+ to bypass Python 3.12 strict regex checks
 fix_regex('fs/dcache.c',
-    r'(\*seqp = seq;\n)(\t+)(if \(!dentry_cmp\(dentry, str, hashlen_len\(hashlen\)\)\)\)\n(\t+)(return dentry;)',
-    r'\1\2\3 {\n'
+    r'(\*seqp = seq;)\n(\s+)(if \(!dentry_cmp[^\n]+)\n(\s+)(return dentry;)',
+    r'\1\n\2\3 {\n'
     r'#ifdef CONFIG_KSU_SUSFS_SUS_PATH\n'
-    r'\2\tif (dentry->d_inode && unlikely(dentry->d_inode->i_state & INODE_STATE_SUS_PATH) && likely(current->susfs_task_state & TASK_STRUCT_NON_ROOT_USER_APP_PROC)) {\n'
-    r'\2\t\tcontinue;\n'
-    r'\2\t}\n'
+    r'\2if (dentry->d_inode && unlikely(dentry->d_inode->i_state & INODE_STATE_SUS_PATH) && likely(current->susfs_task_state & TASK_STRUCT_NON_ROOT_USER_APP_PROC)) {\n'
+    r'\2\tcontinue;\n'
+    r'\2}\n'
     r'#endif\n'
     r'\4\5\n'
     r'\2}',
@@ -375,8 +376,6 @@ fix('fs/namespace.c',
 
 # ── fs/notify/fdinfo.c ────────────────────────────────────────────────────────
 print("\n── fs/notify/fdinfo.c ───────────────────────────────────────────────")
-# Can't use fix() here — 'u32 mask...' is a substring of '//u32 mask...'
-# so the already-applied check false-positives and skips the fix
 try:
     with open('fs/notify/fdinfo.c', 'r') as f:
         s = f.read()
@@ -466,6 +465,7 @@ fix('kernel/sys.c',
 # ── include/linux/susfs_def.h ─────────────────────────────────────────────────
 print("\n── include/linux/susfs_def.h ────────────────────────────────────────")
 
+# susfs_def.h — linux/bits.h added in 4.6, not present in 4.4
 fix('include/linux/susfs_def.h',
     '#include <linux/bits.h>',
     '#include <linux/bitops.h>',
