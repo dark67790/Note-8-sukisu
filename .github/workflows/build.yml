@@ -159,6 +159,7 @@ jobs:
                 code = f.read()
             stubs = """
         // SUSFS v1.5+ Compatibility stubs injected by build workflow
+        #include <linux/types.h>
         #define CMD_SUSFS_HIDE_SUS_MNTS_FOR_NON_SU_PROCS 0x5555555C
         #define CMD_SUSFS_ADD_SUS_MAP 0x5555555D
         #define CMD_SUSFS_ENABLE_AVC_LOG_SPOOFING 0x5555555E
@@ -167,7 +168,7 @@ jobs:
         static inline int susfs_add_sus_map(unsigned long arg) { return 0; }
         static inline int susfs_hide_sus_mnts_for_non_su_procs(unsigned long arg) { return 0; }
         static inline int susfs_enable_avc_log_spoofing(unsigned long arg) { return 0; }
-        static bool susfs_is_avc_log_spoofing_enabled = false;
+        static int susfs_is_avc_log_spoofing_enabled = 0;
         """
             with open(path, "w") as f:
                 f.write(stubs + code)
