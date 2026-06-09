@@ -120,6 +120,10 @@ jobs:
         wget -q "$SUSFS_BASE/include/linux/susfs_def.h" -O include/linux/susfs_def.h \
           && echo "✅ susfs_def.h" || echo "⚠️  susfs_def.h not found"
 
+        # ── Fix for Kernel 4.4 missing bits.h ──
+        sed -i 's/linux\/bits.h/linux\/bitops.h/g' include/linux/susfs_def.h
+        echo "✅ Patched bits.h -> bitops.h for 4.4 compatibility"
+
         if [ -f /tmp/susfs_patches/susfs.patch ]; then
           SIZE=$(wc -c < /tmp/susfs_patches/susfs.patch)
           if [ "$SIZE" -lt 1024 ]; then
