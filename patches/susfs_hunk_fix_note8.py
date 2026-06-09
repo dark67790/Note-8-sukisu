@@ -39,7 +39,7 @@ def fix_regex(path, pattern, replacement, label):
 print("── fs/dcache.c ──────────────────────────────────────────────────────")
 
 fix_regex('fs/dcache.c',
-    r'(\*seqp = seq;\n)(\t+)(if \(!dentry_cmp\(dentry, str, hashlen_len\(hashlen\)\)\))\n(\t+)(return dentry;)',
+    r'(\*seqp = seq;\n)(\t+)(if \(!dentry_cmp\(dentry, str, hashlen_len\(hashlen\)\)\)\)\n(\t+)(return dentry;)',
     r'\1\2\3 {\n'
     r'#ifdef CONFIG_KSU_SUSFS_SUS_PATH\n'
     r'\2\tif (dentry->d_inode && unlikely(dentry->d_inode->i_state & INODE_STATE_SUS_PATH) && likely(current->susfs_task_state & TASK_STRUCT_NON_ROOT_USER_APP_PROC)) {\n'
@@ -462,5 +462,13 @@ fix('kernel/sys.c',
     '\tup_read(&uts_sem);\n'
     '#endif',
     'sys.c: susfs_spoof_uname in newuname')
+
+# ── include/linux/susfs_def.h ─────────────────────────────────────────────────
+print("\n── include/linux/susfs_def.h ────────────────────────────────────────")
+
+fix('include/linux/susfs_def.h',
+    '#include <linux/bits.h>',
+    '#include <linux/bitops.h>',
+    'susfs_def.h: bits.h → bitops.h (not in 4.4)')
 
 print("\n✅ susfs_hunk_fix_note8.py complete")
