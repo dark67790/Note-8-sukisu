@@ -99,12 +99,12 @@ jobs:
     - name: Apply SUSFS Patches
       working-directory: kernel_source
       run: |
-        # Pointed safely to the legacy 4.4 branch matching your base kernel
-        SUSFS_BASE="https://gitlab.com/simonpunk/susfs4ksu/-/raw/kernel-4.4/kernel_patches"
+        # Corrected back to kernel-4.9 so downloads complete without 404 errors
+        SUSFS_BASE="https://gitlab.com/simonpunk/susfs4ksu/-/raw/kernel-4.9/kernel_patches"
         mkdir -p /tmp/susfs_patches
 
-        echo "⬇️  Fetching 50_add_susfs_in_kernel-4.4.patch"
-        wget -q "$SUSFS_BASE/50_add_susfs_in_kernel-4.4.patch" \
+        echo "⬇️  Fetching 50_add_susfs_in_kernel-4.9.patch"
+        wget -q "$SUSFS_BASE/50_add_susfs_in_kernel-4.9.patch" \
           -O /tmp/susfs_patches/susfs.patch \
           && echo "✅ susfs.patch" || echo "⚠️  susfs.patch not found"
 
