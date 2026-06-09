@@ -58,14 +58,19 @@ jobs:
           "https://raw.githubusercontent.com/ReSukiSU/ReSukiSU/main/kernel/setup.sh" \
           | bash -s main || true
 
-        echo "=== Kconfig default BEFORE sed ==="
+        echo "=== Kconfig default BEFORE modifications ==="
         grep -n "default KSU" drivers/kernelsu/Kconfig
 
+        # Update default hook choice to SUSFS
         sed -i 's/default KSU_TRACEPOINT_HOOK/default KSU_SUSFS/' \
           drivers/kernelsu/Kconfig
 
-        echo "=== Kconfig default AFTER sed ==="
-        grep -n "default KSU" drivers/kernelsu/Kconfig
+        # Remove THREAD_INFO_IN_TASK dep from KSU_SUSFS — 4.4 doesn't have it
+        sed -i '/depends on THREAD_INFO_IN_TASK/d' drivers/kernelsu/Kconfig
+        echo "✅ Removed THREAD_INFO_IN_TASK dep"
+
+        echo "=== Kconfig default AFTER modifications ==="
+        grep -n "THREAD_INFO_IN_TASK\|default KSU" drivers/kernelsu/Kconfig
 
         echo "✅ ReSukiSU default hook → SUSFS"
         FAIL=0
@@ -94,11 +99,12 @@ jobs:
     - name: Apply SUSFS Patches
       working-directory: kernel_source
       run: |
-        SUSFS_BASE="https://gitlab.com/simonpunk/susfs4ksu/-/raw/kernel-4.9/kernel_patches"
+        # Pointed safely to the legacy 4.4 branch matching your base kernel
+        SUSFS_BASE="https://gitlab.com/simonpunk/susfs4ksu/-/raw/kernel-4.4/kernel_patches"
         mkdir -p /tmp/susfs_patches
 
-        echo "⬇️  Fetching 50_add_susfs_in_kernel-4.9.patch"
-        wget -q "$SUSFS_BASE/50_add_susfs_in_kernel-4.9.patch" \
+        echo "⬇️  Fetching 50_add_susfs_in_kernel-4.4.patch"
+        wget -q "$SUSFS_BASE/50_add_susfs_in_kernel-4.4.patch" \
           -O /tmp/susfs_patches/susfs.patch \
           && echo "✅ susfs.patch" || echo "⚠️  susfs.patch not found"
 
