@@ -110,11 +110,12 @@ jobs:
           || { echo "❌ not a valid patch — got:"; head -3 /tmp/susfs.patch; exit 1; }
         echo "✅ patch valid"
 
-        # Download the new source files — NOT inside the patch, separate in the repo
+        # Download the new source files — susfs.h is fetched from 5.10 branch for ReSukiSU main compatibility
         echo "⬇️  Fetching susfs.c / susfs.h / susfs_def.h"
         wget -q "$SUSFS_BASE/fs/susfs.c"                    -O fs/susfs.c
-        wget -q "$SUSFS_BASE/include/linux/susfs.h"         -O include/linux/susfs.h
-        wget -q "$SUSFS_BASE/include/linux/susfs_def.h"     -O include/linux/susfs_def.h
+        wget -q "https://gitlab.com/simonpunk/susfs4ksu/-/raw/kernel-5.10/kernel_patches/include/linux/susfs.h" \
+                                                            -O include/linux/susfs.h
+        wget -q "$SUSFS_BASE/include/linux/susfs_def.h"      -O include/linux/susfs_def.h
 
         for f in fs/susfs.c include/linux/susfs.h include/linux/susfs_def.h; do
           head -1 "$f" | grep -qv "<!DOCTYPE\|<html" \
@@ -309,4 +310,3 @@ jobs:
         [ -f /tmp/susfs.patch.rej ] \
           && grep "^---\|^@@" /tmp/susfs.patch.rej | head -30 \
           || echo "No rejects file"
-
