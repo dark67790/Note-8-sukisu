@@ -322,7 +322,7 @@ fix('fs/namespace.c',
     '\t\tif (should_spoof) {\n'
     '\t\t\tif (!custom_mnt_id) {\n'
     '\t\t\t\terr = susfs_mnt_alloc_id(mnt);\n'
-    '\t\t\} else {\n'
+    '\t\t\t} else {\n'
     '\t\t\t\tmnt->mnt_id = custom_mnt_id;\n'
     '\t\t\t\terr = 0;\n'
     '\t\t\t}\n'
