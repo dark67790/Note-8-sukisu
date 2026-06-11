@@ -579,11 +579,13 @@ fix('fs/proc/task_mmu.c',
 # hunk #2 FAILED at 346: extern before show_map_vma
 # hunk #3 SUCCEEDED — the call inside show_map_vma is already there (confirmed line 385)
 fix('fs/proc/task_mmu.c',
+    'static void\n'
     'show_map_vma(struct seq_file *m, struct vm_area_struct *vma, int is_pid)\n'
     '{',
     '#ifdef CONFIG_KSU_SUSFS_SUS_KSTAT\n'
     'extern void susfs_sus_ino_for_show_map_vma(unsigned long ino, dev_t *out_dev, unsigned long *out_ino);\n'
     '#endif\n'
+    'static void\n'
     'show_map_vma(struct seq_file *m, struct vm_area_struct *vma, int is_pid)\n'
     '{',
     'task_mmu.c: hunk#2 — susfs_sus_ino_for_show_map_vma extern before show_map_vma')
