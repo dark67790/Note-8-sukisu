@@ -154,35 +154,35 @@ jobs:
           security/selinux/hooks.c
         echo "✅ selinux enforcing patched"
 
-        cat >> arch/arm64/configs/n950x_defconfig << 'EOF'
-CONFIG_KSU=y
-CONFIG_KALLSYMS_ALL=y
-CONFIG_UH=n
-CONFIG_UH_RKP=n
-CONFIG_UH_LKMAUTH=n
-CONFIG_UH_LKM_BLOCK=n
-CONFIG_RKP_CFP_JOPP=n
-CONFIG_RKP_CFP=n
-CONFIG_SECURITY_DEFEX=n
-CONFIG_PROCA=n
-CONFIG_FIVE=n
-CONFIG_RKP=n
-CONFIG_KDP_NS=n
-CONFIG_KDP=n
-CONFIG_KSU_SUSFS=y
-CONFIG_KSU_SUSFS_SUS_PATH=y
-CONFIG_KSU_SUSFS_SUS_MOUNT=y
-CONFIG_KSU_SUSFS_SUS_KSTAT=y
-CONFIG_KSU_SUSFS_TRY_UMOUNT=y
-CONFIG_KSU_SUSFS_SPOOF_UNAME=y
-CONFIG_KSU_SUSFS_OPEN_REDIRECT=y
-CONFIG_KSU_SUSFS_ENABLE_LOG=y
-CONFIG_KSU_SUSFS_SUS_SU=n
-CONFIG_KSU_SUSFS_AUTO_ADD_SUS_KSU_DEFAULT_MOUNT=y
-CONFIG_KSU_SUSFS_AUTO_ADD_SUS_BIND_MOUNT=y
-CONFIG_KSU_SUSFS_AUTO_ADD_TRY_UMOUNT_FOR_BIND_MOUNT=y
-CONFIG_KSU_SUSFS_SPOOF_CMDLINE_OR_BOOTCONFIG=n
-EOF
+        printf '%s\n' \
+          'CONFIG_KSU=y' \
+          'CONFIG_KALLSYMS_ALL=y' \
+          'CONFIG_UH=n' \
+          'CONFIG_UH_RKP=n' \
+          'CONFIG_UH_LKMAUTH=n' \
+          'CONFIG_UH_LKM_BLOCK=n' \
+          'CONFIG_RKP_CFP_JOPP=n' \
+          'CONFIG_RKP_CFP=n' \
+          'CONFIG_SECURITY_DEFEX=n' \
+          'CONFIG_PROCA=n' \
+          'CONFIG_FIVE=n' \
+          'CONFIG_RKP=n' \
+          'CONFIG_KDP_NS=n' \
+          'CONFIG_KDP=n' \
+          'CONFIG_KSU_SUSFS=y' \
+          'CONFIG_KSU_SUSFS_SUS_PATH=y' \
+          'CONFIG_KSU_SUSFS_SUS_MOUNT=y' \
+          'CONFIG_KSU_SUSFS_SUS_KSTAT=y' \
+          'CONFIG_KSU_SUSFS_TRY_UMOUNT=y' \
+          'CONFIG_KSU_SUSFS_SPOOF_UNAME=y' \
+          'CONFIG_KSU_SUSFS_OPEN_REDIRECT=y' \
+          'CONFIG_KSU_SUSFS_ENABLE_LOG=y' \
+          'CONFIG_KSU_SUSFS_SUS_SU=n' \
+          'CONFIG_KSU_SUSFS_AUTO_ADD_SUS_KSU_DEFAULT_MOUNT=y' \
+          'CONFIG_KSU_SUSFS_AUTO_ADD_SUS_BIND_MOUNT=y' \
+          'CONFIG_KSU_SUSFS_AUTO_ADD_TRY_UMOUNT_FOR_BIND_MOUNT=y' \
+          'CONFIG_KSU_SUSFS_SPOOF_CMDLINE_OR_BOOTCONFIG=n' \
+          >> arch/arm64/configs/n950x_defconfig
         echo "✅ n950x_defconfig updated"
 
     # ── 12. Build ──────────────────────────────────────────────────────────────
@@ -309,3 +309,4 @@ EOF
         [ -f /tmp/susfs.patch.rej ] \
           && grep "^---\|^@@" /tmp/susfs.patch.rej | head -30 \
           || echo "No rejects file"
+
