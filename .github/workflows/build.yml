@@ -56,7 +56,7 @@ jobs:
       run: |
         curl -LSs \
           "https://raw.githubusercontent.com/ReSukiSU/ReSukiSU/main/kernel/setup.sh" \
-          | bash -s main
+          | bash -s susfs-kernel-4.9
 
         echo "=== Kconfig before modifications ==="
         grep -n "default KSU\|THREAD_INFO_IN_TASK" drivers/kernelsu/Kconfig
@@ -110,12 +110,11 @@ jobs:
           || { echo "❌ not a valid patch — got:"; head -3 /tmp/susfs.patch; exit 1; }
         echo "✅ patch valid"
 
-        # Download the new source files — susfs.h is fetched from 5.4 branch
+        # Download the new source files — everything safely pointing back to 4.9 now
         echo "⬇️  Fetching susfs.c / susfs.h / susfs_def.h"
         wget -q "$SUSFS_BASE/fs/susfs.c"                    -O fs/susfs.c
-        wget -q "https://gitlab.com/simonpunk/susfs4ksu/-/raw/kernel-5.4/kernel_patches/include/linux/susfs.h" \
-                                                            -O include/linux/susfs.h
-        wget -q "$SUSFS_BASE/include/linux/susfs_def.h"      -O include/linux/susfs_def.h
+        wget -q "$SUSFS_BASE/include/linux/susfs.h"         -O include/linux/susfs.h
+        wget -q "$SUSFS_BASE/include/linux/susfs_def.h"     -O include/linux/susfs_def.h
 
         for f in fs/susfs.c include/linux/susfs.h include/linux/susfs_def.h; do
           head -1 "$f" | grep -qv "<!DOCTYPE\|<html" \
@@ -226,7 +225,7 @@ jobs:
           CONFIG_KSU_SUSFS_SUS_SU \
           CONFIG_KSU_SUSFS_SPOOF_CMDLINE_OR_BOOTCONFIG; do
           sed -i "s/^${cfg}=y/# ${cfg} is not set/" .config
-          grep -q "^${cfg}" .config || echo "# ${cfg} is not set" >> .config
+          grep -q "^${cfg}" .config || echo "# ${cfg} is not set" >> $config
         done
 
         echo "=== Hook choice after config fixup ==="
