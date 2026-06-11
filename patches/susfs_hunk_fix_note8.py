@@ -662,6 +662,16 @@ fix('kernel/sys.c',
     '#endif',
     'sys.c: newuname spoof injection (Samsung int-errno variant)')
 
+# ── fs/susfs.c ────────────────────────────────────────────────────────────────
+print("\n── fs/susfs.c ───────────────────────────────────────────────────────")
+
+# susfs_mnt_alloc_id is static in susfs.c but called from namespace.c via extern —
+# must be non-static to be visible across translation units.
+fix_regex('fs/susfs.c',
+    r'^static int susfs_mnt_alloc_id\b',
+    'int susfs_mnt_alloc_id',
+    'susfs.c: make susfs_mnt_alloc_id non-static (called from namespace.c)')
+
 # ── Skipped files ─────────────────────────────────────────────────────────────
 print("\n── Skipped (all hunks already succeeded in patch) ───────────────────")
 print("↩️  fs/notify/fdinfo.c  fs/stat.c  fs/statfs.c  kernel/kallsyms.c")
