@@ -68,6 +68,16 @@ jobs:
         # Remove THREAD_INFO_IN_TASK dep — introduced in 4.9, not present in 4.4
         sed -i '/depends on THREAD_INFO_IN_TASK/d' drivers/kernelsu/Kconfig
 
+        # Inject missing runtime source object target into driver Makefile
+        echo 'obj-$(CONFIG_KSU) += runtime/ksud_integration.o' >> drivers/kernelsu/Makefile
+        echo "✅ Wired ksud_integration.o into KernelSU Makefile"
+
+        echo "=== Checking unistd.h Stat Guards ==="
+        grep "__ARCH_WANT_STAT64\|__ARCH_WANT_COMPAT_STAT64" arch/arm64/include/asm/unistd.h arch/arm64/include/uapi/asm/unistd.h 2>/dev/null || echo "No guards found"
+
+        echo "=== Verifying Makefile Add ==="
+        grep "ksud_integration" drivers/kernelsu/Makefile
+
         echo "=== Kconfig after modifications ==="
         grep -n "default KSU\|THREAD_INFO_IN_TASK" drivers/kernelsu/Kconfig
 
