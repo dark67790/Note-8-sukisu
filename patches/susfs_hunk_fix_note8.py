@@ -691,6 +691,41 @@ fix('fs/susfs.c',
     'int susfs_mnt_alloc_id(',
     'susfs.c: make susfs_mnt_alloc_id non-static')
 
+# ── fs/susfs.c — ReSukiSU extension stubs ────────────────────────────────────
+print("\n── fs/susfs.c: ReSukiSU extension stubs ─────────────────────────────")
+
+SUSFS_STUBS = (
+    '\n'
+    '/* ---- ReSukiSU extension stubs (not in kernel-4.9 SUSFS) ---- */\n'
+    '#include <linux/workqueue.h>\n'
+    'static void susfs_extra_works_fn(struct work_struct *work) {}\n'
+    'DECLARE_WORK(susfs_extra_works, susfs_extra_works_fn);\n'
+    '\n'
+    'bool susfs_is_current_proc_umounted(void) { return false; }\n'
+    'void susfs_set_current_proc_umounted(void) {}\n'
+    'void susfs_start_sdcard_monitor_fn(void) {}\n'
+    'int susfs_add_sus_path_loop(void __user *arg) { return 0; }\n'
+    'int susfs_set_hide_sus_mnts_for_non_su_procs(void __user *arg) { return 0; }\n'
+    'int susfs_enable_log(void __user *arg) { return 0; }\n'
+    'int susfs_add_sus_map(void __user *arg) { return 0; }\n'
+    'int susfs_set_avc_log_spoofing(void __user *arg) { return 0; }\n'
+    'int susfs_get_enabled_features(void __user *arg) { return 0; }\n'
+    'int susfs_show_variant(void __user *arg) { return 0; }\n'
+    'int susfs_show_version(void __user *arg) { return 0; }\n'
+)
+
+try:
+    with open('fs/susfs.c', 'r') as f:
+        s = f.read()
+    if 'susfs_extra_works_fn' not in s:
+        with open('fs/susfs.c', 'a') as f:
+            f.write(SUSFS_STUBS)
+        print('✅ susfs.c: appended ReSukiSU extension stubs')
+    else:
+        print('↩️  susfs.c: stubs already present')
+except FileNotFoundError:
+    print('⚠️  susfs.c: not found')
+
 # ── Skipped files ─────────────────────────────────────────────────────────────
 print("\n── Skipped (all hunks already succeeded in patch) ───────────────────")
 print("↩️  fs/notify/fdinfo.c  fs/stat.c  fs/statfs.c  kernel/kallsyms.c")
