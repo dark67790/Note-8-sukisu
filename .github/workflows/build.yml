@@ -72,6 +72,10 @@ jobs:
         echo 'obj-$(CONFIG_KSU) += runtime/ksud_integration.o' >> drivers/kernelsu/Makefile
         echo "✅ Wired ksud_integration.o into KernelSU Makefile"
 
+        # Explicitly link kernelsu subdir compilation path into drivers array
+        echo 'obj-y += kernelsu/' >> drivers/Makefile
+        echo "✅ Enforced kernelsu/ compilation link path in drivers/Makefile"
+
         echo "=== Checking unistd.h Stat Guards ==="
         grep "__ARCH_WANT_STAT64\|__ARCH_WANT_COMPAT_STAT64" arch/arm64/include/asm/unistd.h arch/arm64/include/uapi/asm/unistd.h 2>/dev/null || echo "No guards found"
 
@@ -100,7 +104,23 @@ jobs:
     # ── 8. Apply Manual KSU Hooks ─────────────────────────────────────────────
     - name: Apply Manual KSU Hooks
       working-directory: kernel_source
-      run: python3 ${{ env.PATCHES }}/manual_hooks.py
+      run: |
+        python3 ${{ env.PATCHES }}/manual_hooks.py
+
+        echo "=== Post-patching fs/stat.c with Architecture Guards ==="
+        # Wrap extern declarations if they exist inside the file
+        sed -i '/extern void ksu_handle_newfstat_ret/i #if defined(__ARCH_WANT_STAT64) || defined(__ARCH_WANT_COMPAT_STAT64)' fs/stat.c 2>/dev/null || true
+        sed -i '/extern void ksu_handle_fstat64_ret/a #endif' fs/stat.c 2>/dev/null || true
+
+        # Guard the runtime call logic for newfstat hook execution point
+        sed -i '/ksu_handle_newfstat_ret/i #if defined(__ARCH_WANT_STAT64) || defined(__ARCH_WANT_COMPAT_STAT64)' fs/stat.c 2>/dev/null || true
+        sed -i '/ksu_handle_newfstat_ret/a #endif' fs/stat.c 2>/dev/null || true
+
+        # Guard the runtime call logic for fstat64 hook execution point
+        sed -i '/ksu_handle_fstat64_ret/i #if defined(__ARCH_WANT_STAT64) || defined(__ARCH_WANT_COMPAT_STAT64)' fs/stat.c 2>/dev/null || true
+        sed -i '/ksu_handle_fstat64_ret/a #endif' fs/stat.c 2>/dev/null || true
+
+        echo "✅ Successfully wrapped stat hooks with architecture guards"
 
     # ── 9. Apply SUSFS Patches ────────────────────────────────────────────────
     - name: Apply SUSFS Patches
@@ -243,7 +263,8 @@ jobs:
         grep -E "CONFIG_KSU_SUSFS=|CONFIG_KSU_MANUAL_HOOK|CONFIG_KSU_TRACEPOINT" .config \
           | grep -v "_SUS_PATH\|_SUS_MOUNT\|_SUS_KSTAT\|_SPOOF\|_ENABLE\|_OPEN\|_SUS_MAP\|_HIDE"
 
-        make -j$(nproc) ARCH=arm64 CROSS_COMPILE=$CROSS_COMPILE 2>&1 | tee build.log || true
+        # Added V=1 flag for full output verbose parsing
+        make -j$(nproc) ARCH=arm64 CROSS_COMPILE=$CROSS_COMPILE V=1 2>&1 | tee build.log || true
 
     # ── 13. Grab Image ─────────────────────────────────────────────────────────
     - name: Grab Kernel Image
