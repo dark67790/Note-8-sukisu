@@ -25,6 +25,8 @@ def fix_regex(path, pattern, replacement, label):
     print(f"✅ {label}")
 
 # ── fs/exec.c ──────────────────────────────────────────────────────────────
+print("── fs/exec.c ────────────────────────────────────────────────────────")
+
 fix('fs/exec.c',
     'static int do_execveat_common(int fd, struct filename *filename,',
     '#ifdef CONFIG_KSU\n'
@@ -44,6 +46,8 @@ fix('fs/exec.c',
     'exec.c: hook')
 
 # ── fs/open.c ──────────────────────────────────────────────────────────────
+print("\n── fs/open.c ────────────────────────────────────────────────────────")
+
 fix('fs/open.c',
     'SYSCALL_DEFINE3(faccessat, int, dfd, const char __user *, filename, int, mode)',
     '#ifdef CONFIG_KSU\n'
@@ -63,6 +67,8 @@ fix('fs/open.c',
     'open.c: hook')
 
 # ── fs/stat.c ──────────────────────────────────────────────────────────────
+print("\n── fs/stat.c ────────────────────────────────────────────────────────")
+
 fix('fs/stat.c',
     'int vfs_fstatat(int dfd, const char __user *filename, struct kstat *stat,',
     '#ifdef CONFIG_KSU\n'
@@ -82,17 +88,61 @@ fix('fs/stat.c',
     '\tif ((flag & ~(AT_SYMLINK_NOFOLLOW',
     'stat.c: ksu_handle_stat hook')
 
-fix_regex('fs/stat.c',
-    r'(SYSCALL_DEFINE2\s*\(\s*newfstat\s*,.*?cp_new_stat\s*\(\s*&stat\s*,\s*statbuf\s*\);)',
-    r'\1\n#ifdef CONFIG_KSU\n\tksu_handle_newfstat_ret(&fd, &statbuf);\n#endif',
+fix('fs/stat.c',
+    'SYSCALL_DEFINE2(newfstat, unsigned int, fd, struct stat __user *, statbuf)\n'
+    '{\n'
+    '\tstruct kstat stat;\n'
+    '\tint error = vfs_fstat(fd, &stat);\n'
+    '\n'
+    '\tif (!error)\n'
+    '\t\terror = cp_new_stat(&stat, statbuf);\n'
+    '\n'
+    '\treturn error;\n'
+    '}',
+    'SYSCALL_DEFINE2(newfstat, unsigned int, fd, struct stat __user *, statbuf)\n'
+    '{\n'
+    '\tstruct kstat stat;\n'
+    '\tint error = vfs_fstat(fd, &stat);\n'
+    '\n'
+    '\tif (!error)\n'
+    '\t\terror = cp_new_stat(&stat, statbuf);\n'
+    '\n'
+    '#ifdef CONFIG_KSU\n'
+    '\tksu_handle_newfstat_ret(&fd, &statbuf);\n'
+    '#endif\n'
+    '\treturn error;\n'
+    '}',
     'stat.c: ksu_handle_newfstat_ret hook')
 
-fix_regex('fs/stat.c',
-    r'(SYSCALL_DEFINE2\s*\(\s*fstat64\s*,.*?cp_new_stat64\s*\(\s*&stat\s*,\s*statbuf\s*\);)',
-    r'\1\n#ifdef CONFIG_KSU\n\tksu_handle_fstat64_ret(&fd, &statbuf);\n#endif',
+fix('fs/stat.c',
+    'SYSCALL_DEFINE2(fstat64, unsigned long, fd, struct stat64 __user *, statbuf)\n'
+    '{\n'
+    '\tstruct kstat stat;\n'
+    '\tint error = vfs_fstat(fd, &stat);\n'
+    '\n'
+    '\tif (!error)\n'
+    '\t\terror = cp_new_stat64(&stat, statbuf);\n'
+    '\n'
+    '\treturn error;\n'
+    '}',
+    'SYSCALL_DEFINE2(fstat64, unsigned long, fd, struct stat64 __user *, statbuf)\n'
+    '{\n'
+    '\tstruct kstat stat;\n'
+    '\tint error = vfs_fstat(fd, &stat);\n'
+    '\n'
+    '\tif (!error)\n'
+    '\t\terror = cp_new_stat64(&stat, statbuf);\n'
+    '\n'
+    '#ifdef CONFIG_KSU\n'
+    '\tksu_handle_fstat64_ret(&fd, &statbuf);\n'
+    '#endif\n'
+    '\treturn error;\n'
+    '}',
     'stat.c: ksu_handle_fstat64_ret hook')
 
 # ── kernel/reboot.c ────────────────────────────────────────────────────────
+print("\n── kernel/reboot.c ──────────────────────────────────────────────────")
+
 fix('kernel/reboot.c',
     'SYSCALL_DEFINE4(reboot, int, magic1, int, magic2, unsigned int, cmd,',
     '#ifdef CONFIG_KSU\n'
@@ -110,7 +160,9 @@ fix('kernel/reboot.c',
     '\tif (!ns_capable(pid_ns->user_ns, CAP_SYS_BOOT))',
     'reboot.c: hook')
 
-# ── kernel/sys.c — ksu_handle_setresuid ───────────────────────────────────────
+# ── kernel/sys.c ───────────────────────────────────────────────────────────
+print("\n── kernel/sys.c ─────────────────────────────────────────────────────")
+
 fix('kernel/sys.c',
     'SYSCALL_DEFINE3(setresuid, uid_t, ruid, uid_t, euid, uid_t, suid)\n'
     '{\n'
@@ -138,7 +190,9 @@ fix('kernel/sys.c',
     '\tkruid = make_kuid(ns, ruid);',
     'sys.c: ksu_handle_setresuid hook')
 
-# ── fs/read_write.c — ksu_handle_sys_read ─────────────────────────────────────
+# ── fs/read_write.c ────────────────────────────────────────────────────────
+print("\n── fs/read_write.c ──────────────────────────────────────────────────")
+
 fix('fs/read_write.c',
     'SYSCALL_DEFINE3(read, unsigned int, fd, char __user *, buf, size_t, count)\n'
     '{\n'
@@ -156,7 +210,9 @@ fix('fs/read_write.c',
     '#endif',
     'read_write.c: ksu_handle_sys_read hook')
 
-# ── drivers/input/input.c — ksu_handle_input_handle_event ────────────────────
+# ── drivers/input/input.c ──────────────────────────────────────────────────
+print("\n── drivers/input/input.c ────────────────────────────────────────────")
+
 fix('drivers/input/input.c',
     '\tint disposition;\n'
     '\n'
