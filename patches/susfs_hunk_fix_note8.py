@@ -49,6 +49,18 @@ fix('include/linux/susfs_def.h',
     '#include <linux/bitops.h>',
     'susfs_def.h: bits.h → bitops.h (bits.h not in 4.4)')
 
+# ── susfs_def.h: missing CMD_ constants ───────────────────────────────────────
+print("\n── susfs_def.h: missing CMD_ constants ──────────────────────────────")
+
+fix('include/linux/susfs_def.h',
+    '#define CMD_SUSFS_ADD_OPEN_REDIRECT 0x555c0',
+    '#define CMD_SUSFS_ADD_OPEN_REDIRECT 0x555c0\n'
+    '#define CMD_SUSFS_ADD_SUS_PATH_LOOP 0x555c1\n'
+    '#define CMD_SUSFS_HIDE_SUS_MNTS_FOR_NON_SU_PROCS 0x555c2\n'
+    '#define CMD_SUSFS_ADD_SUS_MAP 0x555c3\n'
+    '#define CMD_SUSFS_ENABLE_AVC_LOG_SPOOFING 0x555c4',
+    'susfs_def.h: add missing ReSukiSU CMD_ constants')
+
 # ── include/linux/mount.h ─────────────────────────────────────────────────────
 print("\n── include/linux/mount.h ────────────────────────────────────────────")
 
