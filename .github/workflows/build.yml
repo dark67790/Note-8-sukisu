@@ -110,7 +110,7 @@ jobs:
           || { echo "❌ not a valid patch — got:"; head -3 /tmp/susfs.patch; exit 1; }
         echo "✅ patch valid"
 
-        # Download the new source files — everything safely pointing back to 4.9 now
+        # Download the new source files from kernel-4.9
         echo "⬇️  Fetching susfs.c / susfs.h / susfs_def.h"
         wget -q "$SUSFS_BASE/fs/susfs.c"                    -O fs/susfs.c
         wget -q "$SUSFS_BASE/include/linux/susfs.h"         -O include/linux/susfs.h
@@ -173,14 +173,11 @@ jobs:
           'CONFIG_KSU_SUSFS_SUS_PATH=y' \
           'CONFIG_KSU_SUSFS_SUS_MOUNT=y' \
           'CONFIG_KSU_SUSFS_SUS_KSTAT=y' \
-          'CONFIG_KSU_SUSFS_TRY_UMOUNT=y' \
           'CONFIG_KSU_SUSFS_SPOOF_UNAME=y' \
-          'CONFIG_KSU_SUSFS_OPEN_REDIRECT=y' \
           'CONFIG_KSU_SUSFS_ENABLE_LOG=y' \
-          'CONFIG_KSU_SUSFS_SUS_SU=n' \
-          'CONFIG_KSU_SUSFS_AUTO_ADD_SUS_KSU_DEFAULT_MOUNT=y' \
-          'CONFIG_KSU_SUSFS_AUTO_ADD_SUS_BIND_MOUNT=y' \
-          'CONFIG_KSU_SUSFS_AUTO_ADD_TRY_UMOUNT_FOR_BIND_MOUNT=y' \
+          'CONFIG_KSU_SUSFS_HIDE_KSU_SUSFS_SYMBOLS=y' \
+          'CONFIG_KSU_SUSFS_OPEN_REDIRECT=y' \
+          'CONFIG_KSU_SUSFS_SUS_MAP=y' \
           'CONFIG_KSU_SUSFS_SPOOF_CMDLINE_OR_BOOTCONFIG=n' \
           >> arch/arm64/configs/n950x_defconfig
         echo "✅ n950x_defconfig updated"
@@ -207,13 +204,11 @@ jobs:
           CONFIG_KSU_SUSFS_SUS_PATH \
           CONFIG_KSU_SUSFS_SUS_MOUNT \
           CONFIG_KSU_SUSFS_SUS_KSTAT \
-          CONFIG_KSU_SUSFS_TRY_UMOUNT \
           CONFIG_KSU_SUSFS_SPOOF_UNAME \
-          CONFIG_KSU_SUSFS_OPEN_REDIRECT \
           CONFIG_KSU_SUSFS_ENABLE_LOG \
-          CONFIG_KSU_SUSFS_AUTO_ADD_SUS_KSU_DEFAULT_MOUNT \
-          CONFIG_KSU_SUSFS_AUTO_ADD_SUS_BIND_MOUNT \
-          CONFIG_KSU_SUSFS_AUTO_ADD_TRY_UMOUNT_FOR_BIND_MOUNT; do
+          CONFIG_KSU_SUSFS_HIDE_KSU_SUSFS_SYMBOLS \
+          CONFIG_KSU_SUSFS_OPEN_REDIRECT \
+          CONFIG_KSU_SUSFS_SUS_MAP; do
           sed -i "s/# ${cfg} is not set/${cfg}=y/" .config
           grep -q "^${cfg}=y" .config || echo "${cfg}=y" >> .config
         done
@@ -222,22 +217,21 @@ jobs:
         for cfg in \
           CONFIG_KSU_MANUAL_HOOK \
           CONFIG_KSU_TRACEPOINT_HOOK \
-          CONFIG_KSU_SUSFS_SUS_SU \
           CONFIG_KSU_SUSFS_SPOOF_CMDLINE_OR_BOOTCONFIG; do
           sed -i "s/^${cfg}=y/# ${cfg} is not set/" .config
-          grep -q "^${cfg}" .config || echo "# ${cfg} is not set" >> $config
+          grep -q "^${cfg}" .config || echo "# ${cfg} is not set" >> .config
         done
 
         echo "=== Hook choice after config fixup ==="
         grep -E "CONFIG_KSU_SUSFS=|CONFIG_KSU_MANUAL_HOOK|CONFIG_KSU_TRACEPOINT" .config \
-          | grep -v "_SUS_PATH\|_SUS_MOUNT\|_SUS_KSTAT\|_TRY_\|_SPOOF\|_ENABLE\|_AUTO\|_OPEN\|_SUS_SU"
+          | grep -v "_SUS_PATH\|_SUS_MOUNT\|_SUS_KSTAT\|_SPOOF\|_ENABLE\|_OPEN\|_SUS_MAP\|_HIDE"
 
         # Let Kconfig settle the choice
         make ARCH=arm64 olddefconfig 2>&1 | grep -iE "KSU|warning|error" || true
 
         echo "=== Final hook selection ==="
         grep -E "CONFIG_KSU_SUSFS=|CONFIG_KSU_MANUAL_HOOK|CONFIG_KSU_TRACEPOINT" .config \
-          | grep -v "_SUS_PATH\|_SUS_MOUNT\|_SUS_KSTAT\|_TRY_\|_SPOOF\|_ENABLE\|_AUTO\|_OPEN\|_SUS_SU"
+          | grep -v "_SUS_PATH\|_SUS_MOUNT\|_SUS_KSTAT\|_SPOOF\|_ENABLE\|_OPEN\|_SUS_MAP\|_HIDE"
 
         make -j$(nproc) ARCH=arm64 CROSS_COMPILE=$CROSS_COMPILE 2>&1 | tee build.log || true
 
@@ -288,7 +282,7 @@ jobs:
         [ ! -f "$LOG" ] && echo "No build log" && exit 0
 
         echo "=== SUSFS errors ==="
-        grep -nE "susfs|sus_path|sus_mount|sus_kstat" "$LOG" \
+        grep -nE "susfs|sus_path|sus_mount|sus_kstat|sus_map" "$LOG" \
           | grep -iE "error:|Error [0-9]+|\*\*\*" | head -30 || true
 
         echo ""
