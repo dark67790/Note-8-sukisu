@@ -61,6 +61,12 @@ fix('include/linux/susfs_def.h',
     '#define CMD_SUSFS_ENABLE_AVC_LOG_SPOOFING 0x555c4',
     'susfs_def.h: add missing ReSukiSU CMD_ constants')
 
+fix('include/linux/susfs_def.h',
+    '#define CMD_SUSFS_ENABLE_AVC_LOG_SPOOFING 0x555c4',
+    '#define CMD_SUSFS_ENABLE_AVC_LOG_SPOOFING 0x555c4\n'
+    '#define SUSFS_MAGIC 0x7f454c46',
+    'susfs_def.h: add missing SUSFS_MAGIC constant')
+
 # ── include/linux/mount.h ─────────────────────────────────────────────────────
 print("\n── include/linux/mount.h ────────────────────────────────────────────")
 
