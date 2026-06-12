@@ -292,7 +292,7 @@ jobs:
 
         echo ""
         echo "=== All errors (first 60) ==="
-        grep -iE "error:|Error [0-9]+|\*\*\*" "$LOG" | head -60 || true
+        grep -iE "error:|Error [0-9]+|\*\*\*|undefined reference|cannot find" "$LOG" | head -60 || true
 
         echo ""
         echo "=== Warnings (first 10) ==="
