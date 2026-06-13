@@ -312,6 +312,10 @@ jobs:
         LOG=kernel_source/build.log
         [ ! -f "$LOG" ] && echo "No build log" && exit 0
 
+        echo "=== ksud_integration build trace ==="
+        grep -n "ksud_integration" "$LOG" | head -20 || true
+
+        echo ""
         echo "=== SUSFS errors ==="
         grep -nE "susfs|sus_path|sus_mount|sus_kstat|sus_map" "$LOG" \
           | grep -iE "error:|Error [0-9]+|\*\*\*" | head -30 || true
