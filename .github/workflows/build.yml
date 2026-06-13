@@ -1,5 +1,4 @@
-
-Name: Build Note8 Kernel (ReSukiSU + SUSFS)
+name: Build Note8 Kernel (ReSukiSU + SUSFS)
 
 permissions:
   contents: write
