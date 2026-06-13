@@ -61,8 +61,8 @@ jobs:
         echo "=== Kconfig before modifications ==="
         grep -n "default KSU\|THREAD_INFO_IN_TASK" drivers/kernelsu/Kconfig
 
-        # Switch default hook choice to KSU_SUSFS (inline hook mode)
-        sed -i 's/default KSU_TRACEPOINT_HOOK/default KSU_SUSFS/' \
+        # Switch default hook choice to KSU_MANUAL_HOOK (Legacy Note 8 compat)
+        sed -i 's/default KSU_TRACEPOINT_HOOK/default KSU_MANUAL_HOOK/' \
           drivers/kernelsu/Kconfig
 
         # Remove THREAD_INFO_IN_TASK dep — introduced in 4.9, not present in 4.4
@@ -223,13 +223,14 @@ jobs:
           arch/arm64/configs/g950x_defconfig \
           arch/arm64/configs/n950x_defconfig
 
-        # Remove conflicting hook entries — KSU_SUSFS must be the only selected choice
+        # Remove conflicting hook entries
         sed -i '/CONFIG_KSU_TRACEPOINT_HOOK\|CONFIG_KSU_MANUAL_HOOK/d' .config
         echo "✅ Cleared competing hook entries from .config"
 
-        # Force KSU + SUSFS options on
+        # Force KSU + SUSFS + MANUAL HOOK options on
         for cfg in \
           CONFIG_KSU \
+          CONFIG_KSU_MANUAL_HOOK \
           CONFIG_KSU_SUSFS \
           CONFIG_KSU_SUSFS_SUS_PATH \
           CONFIG_KSU_SUSFS_SUS_MOUNT \
@@ -243,9 +244,8 @@ jobs:
           grep -q "^${cfg}=y" .config || echo "${cfg}=y" >> .config
         done
 
-        # Force off
+        # Force off unsupported hooks/features
         for cfg in \
-          CONFIG_KSU_MANUAL_HOOK \
           CONFIG_KSU_TRACEPOINT_HOOK \
           CONFIG_KSU_SUSFS_SPOOF_CMDLINE_OR_BOOTCONFIG; do
           sed -i "s/^${cfg}=y/# ${cfg} is not set/" .config
