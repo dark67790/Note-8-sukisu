@@ -58,17 +58,18 @@ jobs:
           "https://raw.githubusercontent.com/ReSukiSU/ReSukiSU/main/kernel/setup.sh" \
           | bash -s susfs-kernel-4.9
 
-        echo "=== Kconfig before modifications ==="
-        grep -n "default KSU\|THREAD_INFO_IN_TASK" drivers/kernelsu/Kconfig
-
-        # Switch default hook choice to KSU_MANUAL_HOOK to force unconditional hooks
-        sed -i 's/default KSU_TRACEPOINT_HOOK/default KSU_MANUAL_HOOK/' \
-          drivers/kernelsu/Kconfig
-
-        # Allow SUSFS features to be used alongside MANUAL_HOOK mode
+        # Allow SUSFS features with MANUAL_HOOK mode
         sed -i 's/depends on KSU_SUSFS$/depends on KSU_SUSFS || KSU_MANUAL_HOOK/' \
           drivers/kernelsu/Kconfig
         echo "✅ SUSFS features unlocked for MANUAL_HOOK mode"
+        grep "depends on KSU_SUSFS\|depends on KSU_MANUAL_HOOK" drivers/kernelsu/Kconfig | head -5
+
+        echo "=== Kconfig before modifications ==="
+        grep -n "default KSU\|THREAD_INFO_IN_TASK" drivers/kernelsu/Kconfig
+
+        # Switch default hook choice to KSU_MANUAL_HOOK (manual hook mode)
+        sed -i 's/default KSU_SUSFS/default KSU_MANUAL_HOOK/' \
+          drivers/kernelsu/Kconfig
 
         # Remove THREAD_INFO_IN_TASK dep — introduced in 4.9, not present in 4.4
         sed -i '/depends on THREAD_INFO_IN_TASK/d' drivers/kernelsu/Kconfig
@@ -83,12 +84,6 @@ jobs:
 
         echo "=== Checking unistd.h Stat Guards ==="
         grep "__ARCH_WANT_STAT64\|__ARCH_WANT_COMPAT_STAT64" arch/arm64/include/asm/unistd.h arch/arm64/include/uapi/asm/unistd.h 2>/dev/null || echo "No guards found"
-
-        echo "=== Verifying Makefile Add ==="
-        grep "ksud_integration" drivers/kernelsu/Makefile
-
-        echo "=== Kconfig after modifications ==="
-        grep -n "default KSU\|THREAD_INFO_IN_TASK\|depends on KSU_SUSFS" drivers/kernelsu/Kconfig
 
         # Sanity checks
         FAIL=0
@@ -111,7 +106,21 @@ jobs:
       working-directory: kernel_source
       run: |
         python3 ${{ env.PATCHES }}/manual_hooks.py
-        echo "✅ Successfully applied manual syscall hooks"
+
+        echo "=== Post-patching fs/stat.c with Architecture Guards ==="
+        # Wrap extern declarations if they exist inside the file
+        sed -i '/extern void ksu_handle_newfstat_ret/i #if defined(__ARCH_WANT_STAT64) || defined(__ARCH_WANT_COMPAT_STAT64)' fs/stat.c 2>/dev/null || true
+        sed -i '/extern void ksu_handle_fstat64_ret/a #endif' fs/stat.c 2>/dev/null || true
+
+        # Guard the runtime call logic for newfstat hook execution point
+        sed -i '/ksu_handle_newfstat_ret/i #if defined(__ARCH_WANT_STAT64) || defined(__ARCH_WANT_COMPAT_STAT64)' fs/stat.c 2>/dev/null || true
+        sed -i '/ksu_handle_newfstat_ret/a #endif' fs/stat.c 2>/dev/null || true
+
+        # Guard the runtime call logic for fstat64 hook execution point
+        sed -i '/ksu_handle_fstat64_ret/i #if defined(__ARCH_WANT_STAT64) || defined(__ARCH_WANT_COMPAT_STAT64)' fs/stat.c 2>/dev/null || true
+        sed -i '/ksu_handle_fstat64_ret/a #endif' fs/stat.c 2>/dev/null || true
+
+        echo "✅ Successfully wrapped stat hooks with architecture guards"
 
     # ── 9. Apply SUSFS Patches ────────────────────────────────────────────────
     - name: Apply SUSFS Patches
@@ -120,7 +129,7 @@ jobs:
         SUSFS_BASE="https://gitlab.com/simonpunk/susfs4ksu/-/raw/kernel-4.9/kernel_patches"
 
         # Download the main VFS patch
-        echo "⬇  Fetching 50_add_susfs_in_kernel-4.9.patch"
+        echo "⬇️  Fetching 50_add_susfs_in_kernel-4.9.patch"
         wget -q "$SUSFS_BASE/50_add_susfs_in_kernel-4.9.patch" \
           -O /tmp/susfs.patch
 
@@ -132,7 +141,7 @@ jobs:
         echo "✅ patch valid"
 
         # Download the new source files from kernel-4.9
-        echo "⬇  Fetching susfs.c / susfs.h / susfs_def.h"
+        echo "⬇️  Fetching susfs.c / susfs.h / susfs_def.h"
         wget -q "$SUSFS_BASE/fs/susfs.c"                    -O fs/susfs.c
         wget -q "$SUSFS_BASE/include/linux/susfs.h"         -O include/linux/susfs.h
         wget -q "$SUSFS_BASE/include/linux/susfs_def.h"     -O include/linux/susfs_def.h
@@ -152,15 +161,7 @@ jobs:
           --fuzz=0 \
           < /tmp/susfs.patch \
           && echo "✅ susfs.patch applied clean" \
-          || echo "⚠  susfs.patch had rejects — Samsung 4.4 fixup step will handle them"
-
-        echo ""
-        echo "=== Reject summary ==="
-        if [ -f /tmp/susfs.patch.rej ]; then
-          grep "^---\|^@@" /tmp/susfs.patch.rej | head -40 || true
-        else
-          echo "No rejects"
-        fi
+          || echo "⚠️  susfs.patch had rejects — Samsung 4.4 fixup step will handle them"
 
     # ── 10. Apply SUSFS Samsung 4.4 Fixups ────────────────────────────────────
     - name: Apply SUSFS Samsung 4.4 Fixups
@@ -177,8 +178,6 @@ jobs:
 
         printf '%s\n' \
           'CONFIG_KSU=y' \
-          'CONFIG_KSU_MANUAL_HOOK=y' \
-          'CONFIG_KSU_SUSFS=n' \
           'CONFIG_KALLSYMS_ALL=y' \
           'CONFIG_UH=n' \
           'CONFIG_UH_RKP=n' \
@@ -192,6 +191,8 @@ jobs:
           'CONFIG_RKP=n' \
           'CONFIG_KDP_NS=n' \
           'CONFIG_KDP=n' \
+          'CONFIG_KSU_SUSFS=n' \
+          'CONFIG_KSU_MANUAL_HOOK=y' \
           'CONFIG_KSU_SUSFS_SUS_PATH=y' \
           'CONFIG_KSU_SUSFS_SUS_MOUNT=y' \
           'CONFIG_KSU_SUSFS_SUS_KSTAT=y' \
@@ -215,11 +216,11 @@ jobs:
           arch/arm64/configs/g950x_defconfig \
           arch/arm64/configs/n950x_defconfig
 
-        # Remove conflicting hook entries — KSU_MANUAL_HOOK must be chosen
-        sed -i '/CONFIG_KSU_TRACEPOINT_HOOK\|CONFIG_KSU_SUSFS=/d' .config
+        # Remove conflicting hook entries
+        sed -i '/CONFIG_KSU_TRACEPOINT_HOOK\|CONFIG_KSU_SUSFS\|CONFIG_KSU_MANUAL_HOOK/d' .config
         echo "✅ Cleared competing hook entries from .config"
 
-        # Force KSU, MANUAL_HOOK, and SUSFS sub-features on
+        # Force KSU + MANUAL_HOOK + SUSFS options on
         for cfg in \
           CONFIG_KSU \
           CONFIG_KSU_MANUAL_HOOK \
@@ -235,7 +236,7 @@ jobs:
           grep -q "^${cfg}=y" .config || echo "${cfg}=y" >> .config
         done
 
-        # Force off conflicting hook layers and unused options
+        # Force off conflicting choices
         for cfg in \
           CONFIG_KSU_SUSFS \
           CONFIG_KSU_TRACEPOINT_HOOK \
@@ -255,7 +256,6 @@ jobs:
         grep -E "CONFIG_KSU_SUSFS=|CONFIG_KSU_MANUAL_HOOK|CONFIG_KSU_TRACEPOINT" .config \
           | grep -v "_SUS_PATH\|_SUS_MOUNT\|_SUS_KSTAT\|_SPOOF\|_ENABLE\|_OPEN\|_SUS_MAP\|_HIDE"
 
-        # Full verbose build compilation execution execution profile
         make -j$(nproc) ARCH=arm64 CROSS_COMPILE=$CROSS_COMPILE V=1 2>&1 | tee build.log || true
 
     # ── 13. Grab Image ─────────────────────────────────────────────────────────
@@ -320,13 +320,3 @@ jobs:
         echo ""
         echo "=== All errors (first 60) ==="
         grep -iE "error:|Error [0-9]+|\*\*\*|undefined reference|cannot find" "$LOG" | head -60 || true
-
-        echo ""
-        echo "=== Warnings (first 10) ==="
-        grep "warning:" "$LOG" | head -10 || true
-
-        echo ""
-        echo "=== SUSFS reject summary ==="
-        [ -f /tmp/susfs.patch.rej ] \
-          && grep "^---\|^@@" /tmp/susfs.patch.rej | head -30 \
-          || echo "No rejects file"
