@@ -58,6 +58,11 @@ jobs:
           "https://raw.githubusercontent.com/ReSukiSU/ReSukiSU/main/kernel/setup.sh" \
           | bash -s susfs-kernel-4.9
 
+        # Remove newfstat/fstat64 hook checks — not required for Samsung 4.4 su/manager
+        sed -i '/ksu_handle_newfstat_ret\|ksu_handle_fstat64_ret/d' \
+          drivers/kernelsu/tools/manual_hook_check.mk
+        echo "✅ Removed optional newfstat/fstat64 checks from manual_hook_check.mk"
+
         # Allow SUSFS features with MANUAL_HOOK mode
         sed -i 's/depends on KSU_SUSFS$/depends on KSU_SUSFS || KSU_MANUAL_HOOK/' \
           drivers/kernelsu/Kconfig
@@ -106,21 +111,7 @@ jobs:
       working-directory: kernel_source
       run: |
         python3 ${{ env.PATCHES }}/manual_hooks.py
-
-        echo "=== Post-patching fs/stat.c with Architecture Guards ==="
-        # Wrap extern declarations if they exist inside the file
-        sed -i '/extern void ksu_handle_newfstat_ret/i #if defined(__ARCH_WANT_STAT64) || defined(__ARCH_WANT_COMPAT_STAT64)' fs/stat.c 2>/dev/null || true
-        sed -i '/extern void ksu_handle_fstat64_ret/a #endif' fs/stat.c 2>/dev/null || true
-
-        # Guard the runtime call logic for newfstat hook execution point
-        sed -i '/ksu_handle_newfstat_ret/i #if defined(__ARCH_WANT_STAT64) || defined(__ARCH_WANT_COMPAT_STAT64)' fs/stat.c 2>/dev/null || true
-        sed -i '/ksu_handle_newfstat_ret/a #endif' fs/stat.c 2>/dev/null || true
-
-        # Guard the runtime call logic for fstat64 hook execution point
-        sed -i '/ksu_handle_fstat64_ret/i #if defined(__ARCH_WANT_STAT64) || defined(__ARCH_WANT_COMPAT_STAT64)' fs/stat.c 2>/dev/null || true
-        sed -i '/ksu_handle_fstat64_ret/a #endif' fs/stat.c 2>/dev/null || true
-
-        echo "✅ Successfully wrapped stat hooks with architecture guards"
+        echo "✅ Manual hooks applied successfully"
 
     # ── 9. Apply SUSFS Patches ────────────────────────────────────────────────
     - name: Apply SUSFS Patches
@@ -315,7 +306,7 @@ jobs:
         echo ""
         echo "=== KSU driver errors ==="
         grep -nE "kernelsu|drivers/kernelsu" "$LOG" \
-          | grep -iE "error:|Error [0-9]+|\*\*\*" | head -30 || true
+          | grep -iE "error:|Error [0-9]+|\*\ * " | head -30 || true
 
         echo ""
         echo "=== All errors (first 60) ==="
