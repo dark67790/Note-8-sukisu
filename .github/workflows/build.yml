@@ -61,9 +61,14 @@ jobs:
         echo "=== Kconfig before modifications ==="
         grep -n "default KSU\|THREAD_INFO_IN_TASK" drivers/kernelsu/Kconfig
 
-        # Switch default hook choice to KSU_SUSFS (inline hook mode)
-        sed -i 's/default KSU_TRACEPOINT_HOOK/default KSU_SUSFS/' \
+        # Switch default hook choice to KSU_MANUAL_HOOK to bypass broken static keys
+        sed -i 's/default KSU_TRACEPOINT_HOOK/default KSU_MANUAL_HOOK/' \
           drivers/kernelsu/Kconfig
+
+        # Allow SUSFS sub-features to be used with MANUAL_HOOK mode
+        sed -i 's/depends on KSU_SUSFS$/depends on KSU_SUSFS || KSU_MANUAL_HOOK/' \
+          drivers/kernelsu/Kconfig
+        echo "✅ SUSFS features unlocked for MANUAL_HOOK mode"
 
         # Remove THREAD_INFO_IN_TASK dep — introduced in 4.9, not present in 4.4
         sed -i '/depends on THREAD_INFO_IN_TASK/d' drivers/kernelsu/Kconfig
@@ -83,7 +88,7 @@ jobs:
         grep "ksud_integration" drivers/kernelsu/Makefile
 
         echo "=== Kconfig after modifications ==="
-        grep -n "default KSU\|THREAD_INFO_IN_TASK" drivers/kernelsu/Kconfig
+        grep -n "default KSU\|THREAD_INFO_IN_TASK\|depends on KSU_" drivers/kernelsu/Kconfig
 
         # Sanity checks
         FAIL=0
@@ -186,6 +191,8 @@ jobs:
 
         printf '%s\n' \
           'CONFIG_KSU=y' \
+          'CONFIG_KSU_MANUAL_HOOK=y' \
+          'CONFIG_KSU_SUSFS=n' \
           'CONFIG_KALLSYMS_ALL=y' \
           'CONFIG_UH=n' \
           'CONFIG_UH_RKP=n' \
@@ -199,7 +206,6 @@ jobs:
           'CONFIG_RKP=n' \
           'CONFIG_KDP_NS=n' \
           'CONFIG_KDP=n' \
-          'CONFIG_KSU_SUSFS=y' \
           'CONFIG_KSU_SUSFS_SUS_PATH=y' \
           'CONFIG_KSU_SUSFS_SUS_MOUNT=y' \
           'CONFIG_KSU_SUSFS_SUS_KSTAT=y' \
@@ -223,14 +229,14 @@ jobs:
           arch/arm64/configs/g950x_defconfig \
           arch/arm64/configs/n950x_defconfig
 
-        # Remove conflicting hook entries — KSU_SUSFS must be the only selected choice
-        sed -i '/CONFIG_KSU_TRACEPOINT_HOOK\|CONFIG_KSU_MANUAL_HOOK/d' .config
+        # Remove conflicting hook entries — KSU_MANUAL_HOOK must be the only selected choice
+        sed -i '/CONFIG_KSU_TRACEPOINT_HOOK\|CONFIG_KSU_SUSFS/d' .config
         echo "✅ Cleared competing hook entries from .config"
 
-        # Force KSU + SUSFS options on
+        # Force KSU + Manual Hook + SUSFS sub-options on
         for cfg in \
           CONFIG_KSU \
-          CONFIG_KSU_SUSFS \
+          CONFIG_KSU_MANUAL_HOOK \
           CONFIG_KSU_SUSFS_SUS_PATH \
           CONFIG_KSU_SUSFS_SUS_MOUNT \
           CONFIG_KSU_SUSFS_SUS_KSTAT \
@@ -243,9 +249,9 @@ jobs:
           grep -q "^${cfg}=y" .config || echo "${cfg}=y" >> .config
         done
 
-        # Force off
+        # Force off conflicting hook logic configurations
         for cfg in \
-          CONFIG_KSU_MANUAL_HOOK \
+          CONFIG_KSU_SUSFS \
           CONFIG_KSU_TRACEPOINT_HOOK \
           CONFIG_KSU_SUSFS_SPOOF_CMDLINE_OR_BOOTCONFIG; do
           sed -i "s/^${cfg}=y/# ${cfg} is not set/" .config
@@ -256,14 +262,14 @@ jobs:
         grep -E "CONFIG_KSU_SUSFS=|CONFIG_KSU_MANUAL_HOOK|CONFIG_KSU_TRACEPOINT" .config \
           | grep -v "_SUS_PATH\|_SUS_MOUNT\|_SUS_KSTAT\|_SPOOF\|_ENABLE\|_OPEN\|_SUS_MAP\|_HIDE"
 
-        # Let Kconfig settle the choice
+        # Let Kconfig settle the choices cleanly
         make ARCH=arm64 olddefconfig 2>&1 | grep -iE "KSU|warning|error" || true
 
         echo "=== Final hook selection ==="
         grep -E "CONFIG_KSU_SUSFS=|CONFIG_KSU_MANUAL_HOOK|CONFIG_KSU_TRACEPOINT" .config \
           | grep -v "_SUS_PATH\|_SUS_MOUNT\|_SUS_KSTAT\|_SPOOF\|_ENABLE\|_OPEN\|_SUS_MAP\|_HIDE"
 
-        # Added V=1 flag for full output verbose parsing
+        # Executing full verbose output build
         make -j$(nproc) ARCH=arm64 CROSS_COMPILE=$CROSS_COMPILE V=1 2>&1 | tee build.log || true
 
     # ── 13. Grab Image ─────────────────────────────────────────────────────────
