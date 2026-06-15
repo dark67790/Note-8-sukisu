@@ -1,3 +1,4 @@
+
 name: Build Note8 Kernel (ReSukiSU + SUSFS)
 
 permissions:
@@ -65,14 +66,14 @@ jobs:
         sed -i 's/default KSU_TRACEPOINT_HOOK/default KSU_MANUAL_HOOK/' \
           drivers/kernelsu/Kconfig
 
-        # Remove THREAD_INFO_IN_TASK dep — introduced in 4.9, not present in 4.4
-        sed -i '/depends on THREAD_INFO_IN_TASK/d' drivers/kernelsu/Kconfig
-
         # Allow SUSFS features with MANUAL_HOOK mode
-        sed -i 's/depends on KSU_SUSFS$/depends on KSU_SUSFS || KSU_MANUAL_HOOK/' \
+        sed -i -E 's/depends on KSU_SUSFS[[:space:]]*$/depends on KSU_SUSFS || KSU_MANUAL_HOOK/' \
           drivers/kernelsu/Kconfig
         echo "✅ SUSFS features unlocked for MANUAL_HOOK mode"
         grep "depends on KSU_SUSFS\|depends on KSU_MANUAL_HOOK" drivers/kernelsu/Kconfig | head -5
+
+        # Remove THREAD_INFO_IN_TASK dep — introduced in 4.9, not present in 4.4
+        sed -i '/depends on THREAD_INFO_IN_TASK/d' drivers/kernelsu/Kconfig
 
         # Inject missing runtime source object target into driver Makefile
         echo 'obj-$(CONFIG_KSU) += runtime/ksud_integration.o' >> drivers/kernelsu/Makefile
@@ -205,8 +206,8 @@ jobs:
           'CONFIG_RKP=n' \
           'CONFIG_KDP_NS=n' \
           'CONFIG_KDP=n' \
-          'CONFIG_KSU_MANUAL_HOOK=y' \
           'CONFIG_KSU_SUSFS=n' \
+          'CONFIG_KSU_MANUAL_HOOK=y' \
           'CONFIG_KSU_SUSFS_SUS_PATH=y' \
           'CONFIG_KSU_SUSFS_SUS_MOUNT=y' \
           'CONFIG_KSU_SUSFS_SUS_KSTAT=y' \
@@ -231,10 +232,10 @@ jobs:
           arch/arm64/configs/n950x_defconfig
 
         # Remove conflicting hook entries — KSU_MANUAL_HOOK must be the only selected choice
-        sed -i '/CONFIG_KSU_TRACEPOINT_HOOK=y\|CONFIG_KSU_SUSFS=y/d' .config
+        sed -i '/CONFIG_KSU_TRACEPOINT_HOOK\|CONFIG_KSU_SUSFS=/d' .config
         echo "✅ Cleared competing hook entries from .config"
 
-        # Force KSU + MANUAL HOOK + SUSFS options on
+        # Force KSU + SUSFS options on
         for cfg in \
           CONFIG_KSU \
           CONFIG_KSU_MANUAL_HOOK \
