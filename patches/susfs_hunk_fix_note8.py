@@ -78,7 +78,7 @@ fix('include/linux/mount.h',
     '};',
     '\tint mnt_flags;\n'
     '\tvoid *data;\n'
-    '#ifdef CONFIG_KSU_SUSFS\n'
+    '#ifdef CONFIG_KSU\n'
     '\tu64 susfs_mnt_id_backup;\n'
     '#endif\n'
     '};',
@@ -92,7 +92,7 @@ fix('include/linux/sched.h',
     '/* CPU-specific state of this task */\n'
     '\tstruct thread_struct thread;',
     '/* CPU-specific state of this task */\n'
-    '#ifdef CONFIG_KSU_SUSFS\n'
+    '#ifdef CONFIG_KSU\n'
     '\tu64 susfs_task_state;\n'
     '\tu64 susfs_last_fake_mnt_id;\n'
     '#endif\n'
@@ -503,7 +503,7 @@ fix('fs/namespace.c',
     '\tsusfs_try_umount_all(current_uid().val);\n'
     '}\n'
     '#endif\n'
-    '#ifdef CONFIG_KSU_SUSFS\n'
+    '#ifdef CONFIG_KSU\n'
     'bool susfs_is_mnt_devname_ksu(struct path *path)\n'
     '{\n'
     '\tstruct mount *mnt;\n'
