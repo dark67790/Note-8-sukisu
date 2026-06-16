@@ -1,3 +1,4 @@
+
 #!/usr/bin/env python3
 # susfs_hunk_fix_note8.py — SUSFS kernel-4.9 → Samsung 4.4 (dreamlte / SM-N950F)
 # Run from kernel_source/ after:
@@ -692,12 +693,21 @@ fix('kernel/sys.c',
 # ── fs/susfs.c ────────────────────────────────────────────────────────────────
 print("\n── fs/susfs.c ───────────────────────────────────────────────────────")
 
-# susfs_mnt_alloc_id is static in susfs.c but called from namespace.c via extern —
-# must be non-static to be visible across translation units.
+# Core function visibility exports needed by fs/namespace.c
 fix('fs/susfs.c',
     'static int susfs_mnt_alloc_id(',
     'int susfs_mnt_alloc_id(',
     'susfs.c: make susfs_mnt_alloc_id non-static')
+
+fix('fs/susfs.c',
+    'static bool susfs_is_current_ksu_domain(',
+    'bool susfs_is_current_ksu_domain(',
+    'susfs.c: make susfs_is_current_ksu_domain non-static')
+
+fix('fs/susfs.c',
+    'static bool susfs_is_current_zygote_domain(',
+    'bool susfs_is_current_zygote_domain(',
+    'susfs.c: make susfs_is_current_zygote_domain non-static')
 
 # ── fs/susfs.c — ReSukiSU extension stubs ────────────────────────────────────
 print("\n── fs/susfs.c: ReSukiSU extension stubs ─────────────────────────────")
