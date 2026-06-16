@@ -99,6 +99,14 @@ fix('include/linux/sched.h',
     '\tstruct thread_struct thread;',
     'sched.h: add susfs fields to task_struct (Samsung 4.4 line 2014)')
 
+# ── fs/Makefile ───────────────────────────────────────────────────────────────
+print("\n── fs/Makefile ──────────────────────────────────────────────────────")
+
+fix('fs/Makefile',
+    'obj-$(CONFIG_KSU_SUSFS) += susfs.o',
+    'obj-$(CONFIG_KSU) += susfs.o',
+    'Makefile: compile susfs.o when CONFIG_KSU=y regardless of hook mode')
+
 # ── fs/dcache.c ───────────────────────────────────────────────────────────────
 print("\n── fs/dcache.c ──────────────────────────────────────────────────────")
 
@@ -730,7 +738,7 @@ except FileNotFoundError:
 print("\n── Skipped (all hunks already succeeded in patch) ───────────────────")
 print("↩️  fs/notify/fdinfo.c  fs/stat.c  fs/statfs.c  kernel/kallsyms.c")
 print("↩️  fs/overlayfs/overlayfs.h  fs/overlayfs/readdir.c  fs/overlayfs/super.c")
-print("↩️  fs/proc/fd.c  fs/Makefile")
+print("↩️  fs/proc/fd.c")
 print("\n── Skipped (incompatible Samsung implementation) ────────────────────")
 print("↩️  fs/overlayfs/inode.c   — ovl_path_lowerdata() absent in Samsung overlay")
 print("↩️  fs/proc/cmdline.c      — Samsung has custom cmdline; SPOOF_CMDLINE=n")
