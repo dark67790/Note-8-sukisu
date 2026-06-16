@@ -407,7 +407,7 @@ fix('fs/namespace.c',
     '#endif\n'
     '\tif (!mnt)\n'
     '\t\treturn ERR_PTR(-ENOMEM);',
-    'fs/namespace.c: hunk#9 — clone_mnt KSU/zygote alloc_vfsmnt logic')
+    'namespace.c: hunk#9 — clone_mnt KSU/zygote alloc_vfsmnt logic')
 
 # hunk #10 FAILED at 1172: clone_mnt — zygote mnt_id reorder after mnt_parent=mnt
 # Same RKP_NS_PROT issue as hunk#8 — skip to avoid pointer mismatch.
@@ -698,16 +698,15 @@ fix('fs/susfs.c',
     'int susfs_mnt_alloc_id(',
     'susfs.c: make susfs_mnt_alloc_id non-static')
 
-# Strip static storage tracking if present on inline implementations
-try:
-    with open('fs/susfs.c', 'r') as f:
-        susfs_content = f.read()
-    if 'static bool susfs_is_current_ksu_domain(' in susfs_content:
-        fix('fs/susfs.c', 'static bool susfs_is_current_ksu_domain(', 'bool susfs_is_current_ksu_domain(', 'susfs.c: strip static from ksu domain')
-    if 'static bool susfs_is_current_zygote_domain(' in susfs_content:
-        fix('fs/susfs.c', 'static bool susfs_is_current_zygote_domain(', 'bool susfs_is_current_zygote_domain(', 'susfs.c: strip static from zygote domain')
-except FileNotFoundError:
-    print('⚠️  fs/susfs.c missing for internal visibility filter check')
+fix('fs/susfs.c',
+    'static bool susfs_is_current_ksu_domain(',
+    'bool susfs_is_current_ksu_domain(',
+    'susfs.c: make susfs_is_current_ksu_domain non-static')
+
+fix('fs/susfs.c',
+    'static bool susfs_is_current_zygote_domain(',
+    'bool susfs_is_current_zygote_domain(',
+    'susfs.c: make susfs_is_current_zygote_domain non-static')
 
 # ── fs/susfs.c — ReSukiSU extension stubs ────────────────────────────────────
 print("\n── fs/susfs.c: ReSukiSU extension stubs ─────────────────────────────")
@@ -718,10 +717,6 @@ SUSFS_STUBS = (
     '#include <linux/workqueue.h>\n'
     'static void susfs_extra_works_fn(struct work_struct *work) {}\n'
     'DECLARE_WORK(susfs_extra_works, susfs_extra_works_fn);\n'
-    '\n'
-    '/* Global linker stubs for MANUAL_HOOK mode runtime execution compatibility */\n'
-    'bool susfs_is_current_ksu_domain(void) { return false; }\n'
-    'bool susfs_is_current_zygote_domain(void) { return false; }\n'
     '\n'
     'bool susfs_is_current_proc_umounted(void) { return false; }\n'
     'void susfs_set_current_proc_umounted(void) {}\n'
@@ -742,11 +737,11 @@ try:
     if 'susfs_extra_works_fn' not in s:
         with open('fs/susfs.c', 'a') as f:
             f.write(SUSFS_STUBS)
-        print('✅ susfs.c: appended ReSukiSU extension stubs and hook stubs')
+        print('✅ susfs.c: appended ReSukiSU extension stubs')
     else:
         print('↩️  susfs.c: stubs already present')
 except FileNotFoundError:
-    print('⚠️  fs/susfs.c: not found')
+    print('⚠️  susfs.c: not found')
 
 # ── Skipped files ─────────────────────────────────────────────────────────────
 print("\n── Skipped (all hunks already succeeded in patch) ───────────────────")
