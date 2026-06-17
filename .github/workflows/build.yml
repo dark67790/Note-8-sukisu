@@ -1,4 +1,4 @@
-name: Build Note8 Kernel (ReSukiSU + SUSFS)
+name: Build Note8 Kernel (ReSukiSU)
 
 permissions:
   contents: write
@@ -9,7 +9,7 @@ on:
 
 jobs:
   build:
-    name: SM-N950F · ReSukiSU + SUSFS · Note 8
+    name: SM-N950F · ReSukiSU · Note 8
     runs-on: ubuntu-latest
 
     steps:
@@ -56,55 +56,18 @@ jobs:
       run: |
         curl -LSs \
           "https://raw.githubusercontent.com/ReSukiSU/ReSukiSU/main/kernel/setup.sh" \
-          | bash -s susfs-kernel-4.9
-
-        # Remove newfstat/fstat64 hook checks — not required for Samsung 4.4 su/manager
-        sed -i '/ksu_handle_newfstat_ret\|ksu_handle_fstat64_ret/d' \
-          drivers/kernelsu/tools/manual_hook_check.mk
-        echo "✅ Removed optional newfstat/fstat64 checks from manual_hook_check.mk"
-
-        echo "=== Kconfig before modifications ==="
-        grep -n "default KSU\|THREAD_INFO_IN_TASK" drivers/kernelsu/Kconfig
-
-        # Switch default hook choice to KSU_MANUAL_HOOK to bypass broken static keys
-        sed -i 's/default KSU_TRACEPOINT_HOOK/default KSU_MANUAL_HOOK/' \
-          drivers/kernelsu/Kconfig
-
-        # Allow SUSFS sub-features to be used with MANUAL_HOOK mode
-        sed -i 's/depends on KSU_SUSFS$/depends on KSU_SUSFS || KSU_MANUAL_HOOK/' \
-          drivers/kernelsu/Kconfig
-        echo "✅ SUSFS features unlocked for MANUAL_HOOK mode"
-
-        # Remove THREAD_INFO_IN_TASK dep — introduced in 4.9, not present in 4.4
-        sed -i '/depends on THREAD_INFO_IN_TASK/d' drivers/kernelsu/Kconfig
-
-        # Inject missing runtime source object target into driver Makefile
-        echo 'obj-$(CONFIG_KSU) += runtime/ksud_integration.o' >> drivers/kernelsu/Makefile
-        echo "✅ Wired ksud_integration.o into KernelSU Makefile"
-
-        # Explicitly link kernelsu subdir compilation path into drivers array
-        echo 'obj-y += kernelsu/' >> drivers/Makefile
-        echo "✅ Enforced kernelsu/ compilation link path in drivers/Makefile"
-
-        echo "=== Checking unistd.h Stat Guards ==="
-        grep "__ARCH_WANT_STAT64\|__ARCH_WANT_COMPAT_STAT64" arch/arm64/include/asm/unistd.h arch/arm64/include/uapi/asm/unistd.h 2>/dev/null || echo "No guards found"
-
-        echo "=== Verifying Makefile Add ==="
-        grep "ksud_integration" drivers/kernelsu/Makefile
-
-        echo "=== Kconfig after modifications ==="
-        grep -n "default KSU\|THREAD_INFO_IN_TASK\|depends on KSU_" drivers/kernelsu/Kconfig
-
-        # Sanity checks
+          | bash -s main || true
         FAIL=0
         grep -q "config KSU" drivers/kernelsu/Kconfig \
-          && echo "✅ Kconfig has KSU"     || { echo "❌ Kconfig missing KSU"; FAIL=1; }
+          && echo "✅ Kconfig has KSU" || { echo "❌ Kconfig missing KSU"; FAIL=1; }
         grep -q "kernelsu" drivers/Makefile \
-          && echo "✅ Makefile wired"      || { echo "❌ Makefile not wired";  FAIL=1; }
+          && echo "✅ Makefile wired"  || { echo "❌ Makefile not wired";  FAIL=1; }
         [ -d drivers/kernelsu ] \
-          && echo "✅ driver dir exists"   || { echo "❌ driver dir missing";  FAIL=1; }
-        [ "$FAIL" -ne 0 ] && { echo "❌ ReSukiSU setup failed"; exit 1; }
-        echo "✅ ReSukiSU ready"
+          && echo "✅ driver dir exists" || { echo "❌ driver dir missing"; FAIL=1; }
+        if [ "$FAIL" -ne 0 ]; then
+          echo "❌ ReSukiSU setup failed"
+          exit 1
+        fi
 
     # ── 7. Apply ReSukiSU 4.4 Compat Fixes ────────────────────────────────────
     - name: Apply ReSukiSU 4.4 Compat Fixes
@@ -114,156 +77,49 @@ jobs:
     # ── 8. Apply Manual KSU Hooks ─────────────────────────────────────────────
     - name: Apply Manual KSU Hooks
       working-directory: kernel_source
-      run: |
-        python3 ${{ env.PATCHES }}/manual_hooks.py
-        echo "✅ Successfully applied manual hooks"
+      run: python3 ${{ env.PATCHES }}/manual_hooks.py
 
-    # ── 9. Apply SUSFS Patches ────────────────────────────────────────────────
-    - name: Apply SUSFS Patches
-      working-directory: kernel_source
-      run: |
-        SUSFS_BASE="https://gitlab.com/simonpunk/susfs4ksu/-/raw/kernel-4.9/kernel_patches"
-
-        # Download the main VFS patch
-        echo "⬇️  Fetching 50_add_susfs_in_kernel-4.9.patch"
-        wget -q "$SUSFS_BASE/50_add_susfs_in_kernel-4.9.patch" \
-          -O /tmp/susfs.patch
-
-        SIZE=$(wc -c < /tmp/susfs.patch)
-        echo "Patch size: ${SIZE} bytes"
-        [ "$SIZE" -lt 5000 ] && echo "❌ patch too small — likely 404" && exit 1
-        head -1 /tmp/susfs.patch | grep -qE "^diff|^From " \
-          || { echo "❌ not a valid patch — got:"; head -3 /tmp/susfs.patch; exit 1; }
-        echo "✅ patch valid"
-
-        # Download the new source files from kernel-4.9
-        echo "⬇️  Fetching susfs.c / susfs.h / susfs_def.h"
-        wget -q "$SUSFS_BASE/fs/susfs.c"                    -O fs/susfs.c
-        wget -q "$SUSFS_BASE/include/linux/susfs.h"         -O include/linux/susfs.h
-        wget -q "$SUSFS_BASE/include/linux/susfs_def.h"     -O include/linux/susfs_def.h
-
-        for f in fs/susfs.c include/linux/susfs.h include/linux/susfs_def.h; do
-          head -1 "$f" | grep -qv "<!DOCTYPE\|<html" \
-            && echo "✅ $f" \
-            || { echo "❌ $f looks like a 404 page"; exit 1; }
-        done
-
-        # Apply the patch — fuzz=0 so bad-offset hunks reject cleanly instead of
-        # silently landing in wrong functions
-        echo "=== Applying susfs.patch ==="
-        patch -p1 \
-          --reject-file=/tmp/susfs.patch.rej \
-          --no-backup-if-mismatch \
-          --fuzz=0 \
-          < /tmp/susfs.patch \
-          && echo "✅ susfs.patch applied clean" \
-          || echo "⚠️  susfs.patch had rejects — Samsung 4.4 fixup step will handle them"
-
-        echo ""
-        echo "=== Reject summary ==="
-        if [ -f /tmp/susfs.patch.rej ]; then
-          grep "^---\|^@@" /tmp/susfs.patch.rej | head -40 || true
-        else
-          echo "No rejects"
-        fi
-
-    # ── 10. Apply SUSFS Samsung 4.4 Fixups ────────────────────────────────────
-    - name: Apply SUSFS Samsung 4.4 Fixups
-      working-directory: kernel_source
-      run: python3 ${{ env.PATCHES }}/susfs_hunk_fix_note8.py
-
-    # ── 11. Kernel Config ──────────────────────────────────────────────────────
+    # ── 9. Kernel Config ───────────────────────────────────────────────────────
     - name: Set Kernel Config
       working-directory: kernel_source
       run: |
-        sed -i 's/int selinux_enforcing = 0;/int selinux_enforcing = 1;/g' \
-          security/selinux/hooks.c
-        echo "✅ selinux enforcing patched"
-
-        printf '%s\n' \
-          'CONFIG_KSU=y' \
-          'CONFIG_KSU_MANUAL_HOOK=y' \
-          'CONFIG_KSU_SUSFS=n' \
-          'CONFIG_KALLSYMS_ALL=y' \
-          'CONFIG_UH=n' \
-          'CONFIG_UH_RKP=n' \
-          'CONFIG_UH_LKMAUTH=n' \
-          'CONFIG_UH_LKM_BLOCK=n' \
-          'CONFIG_RKP_CFP_JOPP=n' \
-          'CONFIG_RKP_CFP=n' \
-          'CONFIG_SECURITY_DEFEX=n' \
-          'CONFIG_PROCA=n' \
-          'CONFIG_FIVE=n' \
-          'CONFIG_RKP=n' \
-          'CONFIG_KDP_NS=n' \
-          'CONFIG_KDP=n' \
-          'CONFIG_KSU_SUSFS_SUS_PATH=y' \
-          'CONFIG_KSU_SUSFS_SUS_MOUNT=y' \
-          'CONFIG_KSU_SUSFS_SUS_KSTAT=y' \
-          'CONFIG_KSU_SUSFS_SPOOF_UNAME=y' \
-          'CONFIG_KSU_SUSFS_ENABLE_LOG=y' \
-          'CONFIG_KSU_SUSFS_HIDE_KSU_SUSFS_SYMBOLS=y' \
-          'CONFIG_KSU_SUSFS_OPEN_REDIRECT=y' \
-          'CONFIG_KSU_SUSFS_SUS_MAP=y' \
-          'CONFIG_KSU_SUSFS_SPOOF_CMDLINE_OR_BOOTCONFIG=n' \
-          >> arch/arm64/configs/n950x_defconfig
+        cat >> arch/arm64/configs/n950x_defconfig << 'EOF'
+        CONFIG_KSU=y
+        CONFIG_KSU_MANUAL_HOOK=y
+        CONFIG_KSU_MANUAL_HOOK_AUTO_SETUID_HOOK=y
+        CONFIG_KSU_MANUAL_HOOK_AUTO_INITRC_HOOK=y
+        CONFIG_KSU_MANUAL_HOOK_AUTO_INPUT_HOOK=y
+        CONFIG_KALLSYMS_ALL=y
+        CONFIG_UH=n
+        CONFIG_UH_RKP=n
+        CONFIG_UH_LKMAUTH=n
+        CONFIG_UH_LKM_BLOCK=n
+        CONFIG_RKP_CFP_JOPP=n
+        CONFIG_RKP_CFP=n
+        CONFIG_SECURITY_DEFEX=n
+        CONFIG_PROCA=n
+        CONFIG_FIVE=n
+        CONFIG_RKP=n
+        CONFIG_KDP_NS=n
+        CONFIG_KDP=n
+        EOF
         echo "✅ n950x_defconfig updated"
 
-    # ── 12. Build ──────────────────────────────────────────────────────────────
+    # ── 10. Build ──────────────────────────────────────────────────────────────
     - name: Build Kernel
       working-directory: kernel_source
       run: |
         export ARCH=arm64
         export CROSS_COMPILE=${{ env.CROSS_COMPILE }}
-
         ARCH=arm64 scripts/kconfig/merge_config.sh \
           arch/arm64/configs/g950x_defconfig \
           arch/arm64/configs/n950x_defconfig
+        grep "CONFIG_KSU=y" .config \
+          && echo "✅ CONFIG_KSU=y in final config" \
+          || echo "⚠️  CONFIG_KSU not in final config"
+        make -j$(nproc) ARCH=arm64 CROSS_COMPILE=$CROSS_COMPILE 2>&1 | tee build.log || true
 
-        # Remove conflicting hook entries — KSU_MANUAL_HOOK must be the only selected choice
-        sed -i '/CONFIG_KSU_TRACEPOINT_HOOK\|CONFIG_KSU_SUSFS/d' .config
-        echo "✅ Cleared competing hook entries from .config"
-
-        # Force KSU + Manual Hook + SUSFS sub-options on
-        for cfg in \
-          CONFIG_KSU \
-          CONFIG_KSU_MANUAL_HOOK \
-          CONFIG_KSU_SUSFS_SUS_PATH \
-          CONFIG_KSU_SUSFS_SUS_MOUNT \
-          CONFIG_KSU_SUSFS_SUS_KSTAT \
-          CONFIG_KSU_SUSFS_SPOOF_UNAME \
-          CONFIG_KSU_SUSFS_ENABLE_LOG \
-          CONFIG_KSU_SUSFS_HIDE_KSU_SUSFS_SYMBOLS \
-          CONFIG_KSU_SUSFS_OPEN_REDIRECT \
-          CONFIG_KSU_SUSFS_SUS_MAP; do
-          sed -i "s/# ${cfg} is not set/${cfg}=y/" .config
-          grep -q "^${cfg}=y" .config || echo "${cfg}=y" >> .config
-        done
-
-        # Force off conflicting hook logic configurations
-        for cfg in \
-          CONFIG_KSU_SUSFS \
-          CONFIG_KSU_TRACEPOINT_HOOK \
-          CONFIG_KSU_SUSFS_SPOOF_CMDLINE_OR_BOOTCONFIG; do
-          sed -i "s/^${cfg}=y/# ${cfg} is not set/" .config
-          grep -q "^${cfg}" .config || echo "# ${cfg} is not set" >> .config
-        done
-
-        echo "=== Hook choice after config fixup ==="
-        grep -E "CONFIG_KSU_SUSFS=|CONFIG_KSU_MANUAL_HOOK|CONFIG_KSU_TRACEPOINT" .config \
-          | grep -v "_SUS_PATH\|_SUS_MOUNT\|_SUS_KSTAT\|_SPOOF\|_ENABLE\|_OPEN\|_SUS_MAP\|_HIDE"
-
-        # Let Kconfig settle the choices cleanly
-        make ARCH=arm64 olddefconfig 2>&1 | grep -iE "KSU|warning|error" || true
-
-        echo "=== Final hook selection ==="
-        grep -E "CONFIG_KSU_SUSFS=|CONFIG_KSU_MANUAL_HOOK|CONFIG_KSU_TRACEPOINT" .config \
-          | grep -v "_SUS_PATH\|_SUS_MOUNT\|_SUS_KSTAT\|_SPOOF\|_ENABLE\|_OPEN\|_SUS_MAP\|_HIDE"
-
-        # Executing full verbose output build
-        make -j$(nproc) ARCH=arm64 CROSS_COMPILE=$CROSS_COMPILE V=1 2>&1 | tee build.log || true
-
-    # ── 13. Grab Image ─────────────────────────────────────────────────────────
+    # ── 11. Grab Image ─────────────────────────────────────────────────────────
     - name: Grab Kernel Image
       if: always()
       id: package
@@ -274,7 +130,7 @@ jobs:
           echo "image=$IMAGE"      >> $GITHUB_OUTPUT
           echo "image_found=true"  >> $GITHUB_OUTPUT
         else
-          echo "❌ Image not found — check build.log"
+          echo "❌ Image not found — check build.log artifact"
           echo "image_found=false" >> $GITHUB_OUTPUT
         fi
 
@@ -295,43 +151,29 @@ jobs:
       if: always()
       uses: actions/upload-artifact@v4
       with:
-        name: Note8-ReSukiSU-SUSFS
+        name: Note8-ReSukiSU
         path: |
           ${{ steps.package.outputs.image }}
           kernel_source/build.log
         if-no-files-found: ignore
         compression-level: 0
 
-    # ── 14. Surface Build Errors ───────────────────────────────────────────────
+    # ── 12. Surface Build Errors ───────────────────────────────────────────────
     - name: Surface Build Errors
       if: always()
       run: |
-        LOG=kernel_source/build.log
-        [ ! -f "$LOG" ] && echo "No build log" && exit 0
-
-        echo "=== ksud_integration build trace ==="
-        grep -n "ksud_integration" "$LOG" | head -20 || true
-
-        echo ""
-        echo "=== SUSFS errors ==="
-        grep -nE "susfs|sus_path|sus_mount|sus_kstat|sus_map" "$LOG" \
-          | grep -iE "error:|Error [0-9]+|\*\*\*" | head -30 || true
-
-        echo ""
+        if [ ! -f kernel_source/build.log ]; then
+          echo "No build log found"
+          exit 0
+        fi
         echo "=== KSU driver errors ==="
-        grep -nE "kernelsu|drivers/kernelsu" "$LOG" \
-          | grep -iE "error:|Error [0-9]+|\*\*\*" | head -30 || true
-
+        grep -n "kernelsu\|drivers/kernelsu" kernel_source/build.log \
+          | grep "error:" | head -30 || true
         echo ""
-        echo "=== All errors (first 60) ==="
-        grep -iE "error:|Error [0-9]+|\*\*\*|undefined reference|cannot find" "$LOG" | head -60 || true
-
+        echo "=== All errors ==="
+        ERRORS=$(grep -c "error:" kernel_source/build.log 2>/dev/null || echo 0)
+        echo "$ERRORS error(s) found"
+        grep "error:" kernel_source/build.log | head -60 || true
         echo ""
-        echo "=== Warnings (first 10) ==="
-        grep "warning:" "$LOG" | head -10 || true
-
-        echo ""
-        echo "=== SUSFS reject summary ==="
-        [ -f /tmp/susfs.patch.rej ] \
-          && grep "^---\|^@@" /tmp/susfs.patch.rej | head -30 \
-          || echo "No rejects file"
+        echo "=== First 10 warnings ==="
+        grep "warning:" kernel_source/build.log | head -10 || true
