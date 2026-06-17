@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# manual_hooks.py — ReSukiSU manual hooks for non-GKI 4.4 (SUSFS Inline Hook Mode)
+# manual_hooks.py — ReSukiSU manual hooks for non-GKI 4.4
 # Run from kernel_source/
 
 import re
@@ -25,8 +25,6 @@ def fix_regex(path, pattern, replacement, label):
     print(f"✅ {label}")
 
 # ── fs/exec.c ──────────────────────────────────────────────────────────────
-print("── fs/exec.c ────────────────────────────────────────────────────────")
-
 fix('fs/exec.c',
     'static int do_execveat_common(int fd, struct filename *filename,',
     '#ifdef CONFIG_KSU\n'
@@ -46,8 +44,6 @@ fix('fs/exec.c',
     'exec.c: hook')
 
 # ── fs/open.c ──────────────────────────────────────────────────────────────
-print("\n── fs/open.c ────────────────────────────────────────────────────────")
-
 fix('fs/open.c',
     'SYSCALL_DEFINE3(faccessat, int, dfd, const char __user *, filename, int, mode)',
     '#ifdef CONFIG_KSU\n'
@@ -67,12 +63,12 @@ fix('fs/open.c',
     'open.c: hook')
 
 # ── fs/stat.c ──────────────────────────────────────────────────────────────
-print("\n── fs/stat.c ────────────────────────────────────────────────────────")
-
 fix('fs/stat.c',
     'int vfs_fstatat(int dfd, const char __user *filename, struct kstat *stat,',
     '#ifdef CONFIG_KSU\n'
     'extern int ksu_handle_stat(int *dfd, const char __user **filename_user, int *flags);\n'
+    'extern void ksu_handle_newfstat_ret(unsigned int *fd, struct stat __user **statbuf_ptr);\n'
+    'extern void ksu_handle_fstat64_ret(unsigned long *fd, struct stat64 __user **statbuf_ptr);\n'
     '#endif\n'
     'int vfs_fstatat(int dfd, const char __user *filename, struct kstat *stat,',
     'stat.c: externs')
@@ -86,9 +82,17 @@ fix('fs/stat.c',
     '\tif ((flag & ~(AT_SYMLINK_NOFOLLOW',
     'stat.c: ksu_handle_stat hook')
 
-# ── kernel/reboot.c ────────────────────────────────────────────────────────
-print("\n── kernel/reboot.c ──────────────────────────────────────────────────")
+fix_regex('fs/stat.c',
+    r'(SYSCALL_DEFINE2\s*\(\s*newfstat\s*,.*?cp_new_stat\s*\(\s*&stat\s*,\s*statbuf\s*\);)',
+    r'\1\n#ifdef CONFIG_KSU\n\tksu_handle_newfstat_ret(&fd, &statbuf);\n#endif',
+    'stat.c: ksu_handle_newfstat_ret hook')
 
+fix_regex('fs/stat.c',
+    r'(SYSCALL_DEFINE2\s*\(\s*fstat64\s*,.*?cp_new_stat64\s*\(\s*&stat\s*,\s*statbuf\s*\);)',
+    r'\1\n#ifdef CONFIG_KSU\n\tksu_handle_fstat64_ret(&fd, &statbuf);\n#endif',
+    'stat.c: ksu_handle_fstat64_ret hook')
+
+# ── kernel/reboot.c ────────────────────────────────────────────────────────
 fix('kernel/reboot.c',
     'SYSCALL_DEFINE4(reboot, int, magic1, int, magic2, unsigned int, cmd,',
     '#ifdef CONFIG_KSU\n'
@@ -105,71 +109,5 @@ fix('kernel/reboot.c',
     '#endif\n\n'
     '\tif (!ns_capable(pid_ns->user_ns, CAP_SYS_BOOT))',
     'reboot.c: hook')
-
-# ── kernel/sys.c ───────────────────────────────────────────────────────────
-print("\n── kernel/sys.c ─────────────────────────────────────────────────────")
-
-fix('kernel/sys.c',
-    'SYSCALL_DEFINE3(setresuid, uid_t, ruid, uid_t, euid, uid_t, suid)\n'
-    '{\n'
-    '\tstruct user_namespace *ns = current_user_ns();\n'
-    '\tconst struct cred *old;\n'
-    '\tstruct cred *new;\n'
-    '\tint retval;\n'
-    '\tkuid_t kruid, keuid, ksuid;\n'
-    '\n'
-    '\tkruid = make_kuid(ns, ruid);',
-    '#ifdef CONFIG_KSU\n'
-    'extern int ksu_handle_setresuid(uid_t *ruid, uid_t *euid, uid_t *suid);\n'
-    '#endif\n'
-    'SYSCALL_DEFINE3(setresuid, uid_t, ruid, uid_t, euid, uid_t, suid)\n'
-    '{\n'
-    '\tstruct user_namespace *ns = current_user_ns();\n'
-    '\tconst struct cred *old;\n'
-    '\tstruct cred *new;\n'
-    '\tint retval;\n'
-    '\tkuid_t kruid, keuid, ksuid;\n'
-    '\n'
-    '#ifdef CONFIG_KSU\n'
-    '\tksu_handle_setresuid(&ruid, &euid, &suid);\n'
-    '#endif\n'
-    '\tkruid = make_kuid(ns, ruid);',
-    'sys.c: ksu_handle_setresuid hook')
-
-# ── fs/read_write.c ────────────────────────────────────────────────────────
-print("\n── fs/read_write.c ──────────────────────────────────────────────────")
-
-fix('fs/read_write.c',
-    'SYSCALL_DEFINE3(read, unsigned int, fd, char __user *, buf, size_t, count)\n'
-    '{\n'
-    '\tstruct fd f = fdget_pos(fd);\n'
-    '\tssize_t ret = -EBADF;',
-    '#ifdef CONFIG_KSU\n'
-    'extern int ksu_handle_sys_read(unsigned int *fd, char __user **buf, size_t *count);\n'
-    '#endif\n'
-    'SYSCALL_DEFINE3(read, unsigned int, fd, char __user *, buf, size_t, count)\n'
-    '{\n'
-    '\tstruct fd f = fdget_pos(fd);\n'
-    '\tssize_t ret = -EBADF;\n'
-    '#ifdef CONFIG_KSU\n'
-    '\tksu_handle_sys_read(&fd, &buf, &count);\n'
-    '#endif',
-    'read_write.c: ksu_handle_sys_read hook')
-
-# ── drivers/input/input.c ──────────────────────────────────────────────────
-print("\n── drivers/input/input.c ────────────────────────────────────────────")
-
-fix('drivers/input/input.c',
-    '\tint disposition;\n'
-    '\n'
-    '\tdisposition = input_get_disposition(dev, type, code, &value);',
-    '\tint disposition;\n'
-    '#ifdef CONFIG_KSU\n'
-    'extern int ksu_handle_input_handle_event(unsigned int *type, unsigned int *code, int *value);\n'
-    '\tksu_handle_input_handle_event(&type, &code, &value);\n'
-    '#endif\n'
-    '\n'
-    '\tdisposition = input_get_disposition(dev, type, code, &value);',
-    'input.c: ksu_handle_input_handle_event hook')
 
 print("\n✅ All ReSukiSU manual hooks applied")
