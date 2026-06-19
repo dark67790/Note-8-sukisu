@@ -10,7 +10,7 @@ on:
 jobs:
   build:
     name: SM-N950F · ReSukiSU · SUSFS · Note 8
-    runs-runs-on: ubuntu-latest
+    runs-on: ubuntu-latest
 
     steps:
     # ── 1. Checkout ────────────────────────────────────────────────────────────
