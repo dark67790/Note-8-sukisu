@@ -638,6 +638,7 @@ fix('fs/namespace.c',
     '\tfor (; mnt && mnt->mnt_parent && mnt != mnt->mnt_parent && '
     'mnt->mnt_id >= DEFAULT_KSU_MNT_ID; mnt = mnt->mnt_parent) { }\n'
     '\tmnt_id = mnt->mnt_id;\n'
+    '\tunlock_mount_hash();\n'
     '\treturn mnt_id;\n'
     '}\n'
     '\n'
@@ -1035,10 +1036,6 @@ fix('fs/stat.c',
     '\tsusfs_sus_kstat_spoof_generic_fillattr(inode, stat);\n'
     '#endif\n'
     '}',
-    '#ifdef CONFIG_KSU_SUSFS_SUS_KSTAT\n'
-    '\tsusfs_sus_kstat_spoof_generic_fillattr(inode, stat);\n'
-    '#endif\n'
-    '}',
     'stat.c hunk#2: generic_fillattr SUS_KSTAT spoof call')
 
 print("↩️  stat.c hunk#3: covered by hunk#2 (generic_fillattr spoof call) — SKIP")
@@ -1131,7 +1128,7 @@ fix('mm/memory.c',
 # ═══════════════════════════════════════════════════════════════════════════════
 # fs/susfs.c
 # ═══════════════════════════════════════════════════════════════════════════════
-print("\n══ fs/susfs.c ═══════════════════════════════════════════════════════════")
+print("\n══ fs/susfs.c ═════════════════════════════════════════════════════════")
 with open('fs/susfs.c', 'r') as f:
     _sc = f.read()
 if 'extern bool susfs_is_current_ksu_domain(void);' in _sc:
