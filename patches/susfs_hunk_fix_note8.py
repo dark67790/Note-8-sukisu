@@ -840,6 +840,20 @@ fix('fs/proc/task_mmu.c',
     'task_mmu.c hunk#2: show_map_vma externs')
 
 fix('fs/proc/task_mmu.c',
+    '\tdev_t dev = 0;\n'
+    '\tconst char *name = NULL;\n'
+    '\n'
+    '\tif (file) {',
+    '\tdev_t dev = 0;\n'
+    '\tconst char *name = NULL;\n'
+    '#ifdef CONFIG_KSU_SUSFS_OPEN_REDIRECT\n'
+    '\tchar *spoofed_redirected_name = NULL;\n'
+    '#endif\n'
+    '\n'
+    '\tif (file) {',
+    'task_mmu.c: show_map_vma spoofed_redirected_name declaration')
+
+fix('fs/proc/task_mmu.c',
     '\tif (file) {\n'
     '\t\tstruct inode *inode = file_inode(vma->vm_file);\n'
     '\t\tdev = inode->i_sb->s_dev;\n'
