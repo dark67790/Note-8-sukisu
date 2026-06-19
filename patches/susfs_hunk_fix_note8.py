@@ -580,6 +580,15 @@ fix('fs/notify/fdinfo.c',
 # fs/open.c
 # ═══════════════════════════════════════════════════════════════════════════════
 print("\n══ fs/open.c ════════════════════════════════════════════════════════════")
+
+fix('fs/open.c',
+    '#include <linux/personality.h>',
+    '#include <linux/personality.h>\n'
+    '#ifdef CONFIG_KSU_SUSFS_OPEN_REDIRECT\n'
+    '#include <linux/susfs_def.h>\n'
+    '#endif',
+    'open.c: susfs_def.h include')
+
 fix('fs/open.c',
     'long do_sys_open(int dfd, const char __user *filename, int flags, umode_t mode)\n'
     '{\n'
