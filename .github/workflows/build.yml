@@ -1,4 +1,4 @@
-name: Build Note8 Kernel (ReSukiSU)
+name: Build Note8 Kernel (ReSukiSU + SUSFS)
 
 permissions:
   contents: write
@@ -9,7 +9,7 @@ on:
 
 jobs:
   build:
-    name: SM-N950F · ReSukiSU · Note 8
+    name: SM-N950F · ReSukiSU · SUSFS · Note 8
     runs-on: ubuntu-latest
 
     steps:
@@ -69,17 +69,50 @@ jobs:
           exit 1
         fi
 
-    # ── 7. Apply ReSukiSU 4.4 Compat Fixes ────────────────────────────────────
+    # ── 7. Patch Kconfig: drop THREAD_INFO_IN_TASK dependency from KSU_SUSFS ────
+    # CRITICAL: do NOT force CONFIG_THREAD_INFO_IN_TASK=y anywhere in this
+    # workflow. That symbol is unsatisfiable on Samsung 4.4's real ABI
+    # (current_thread_info() still reads sp_el0, task_struct layout is
+    # native). Forcing it desyncs thread_info storage from task_struct and
+    # silently corrupts manager-detection while still compiling/booting.
+    # SUSFS's own source has zero references to thread_info, so the
+    # dependency is just an inherited upstream GKI assumption — safe to drop.
+    - name: Patch Kconfig (remove THREAD_INFO_IN_TASK dependency)
+      working-directory: kernel_source
+      run: |
+        sed -i 's/depends on THREAD_INFO_IN_TASK && 64BIT/depends on 64BIT/' \
+          drivers/kernelsu/Kconfig
+        grep -A1 "config KSU_SUSFS$" drivers/kernelsu/Kconfig
+
+    # ── 8. Apply ReSukiSU 4.4 Compat Fixes ────────────────────────────────────
     - name: Apply ReSukiSU 4.4 Compat Fixes
       working-directory: kernel_source
       run: python3 ${{ env.PATCHES }}/sukisu_compat_fix.py
 
-    # ── 8. Apply Manual KSU Hooks ─────────────────────────────────────────────
+    # ── 9. Apply Manual KSU Hooks ─────────────────────────────────────────────
     - name: Apply Manual KSU Hooks
       working-directory: kernel_source
       run: python3 ${{ env.PATCHES }}/manual_hooks.py
 
-    # ── 9. Kernel Config ───────────────────────────────────────────────────────
+    # ── 10. Download and apply SUSFS v2.1.0 patch (4.9-targeted, fuzz=0) ──────
+    - name: Apply SUSFS Patch
+      working-directory: kernel_source
+      run: |
+        curl -LSs -o /tmp/susfs_4.9.patch \
+          "https://raw.githubusercontent.com/JackA1ltman/NonGKI_Kernel_Build_2nd/mainline/Patches/Patch/susfs_patch_to_4.9.patch"
+        patch -p1 --fuzz=0 < /tmp/susfs_4.9.patch || true
+        echo "✅ SUSFS base patch applied (expected: many hunks fail — fixed by round 1/2 scripts below)"
+
+    # ── 11. SUSFS Hunk Fixups (round 1 + round 2) ─────────────────────────────
+    - name: Apply SUSFS Hunk Fixes (round 1)
+      working-directory: kernel_source
+      run: python3 ${{ env.PATCHES }}/susfs_hunk_fix_note8.py
+
+    - name: Apply SUSFS Hunk Fixes (round 2)
+      working-directory: kernel_source
+      run: python3 ${{ env.PATCHES }}/susfs_hunk_fix_note8_round2.py
+
+    # ── 12. Kernel Config ──────────────────────────────────────────────────────
     - name: Set Kernel Config
       working-directory: kernel_source
       run: |
@@ -89,6 +122,16 @@ jobs:
         CONFIG_KSU_MANUAL_HOOK_AUTO_SETUID_HOOK=y
         CONFIG_KSU_MANUAL_HOOK_AUTO_INITRC_HOOK=y
         CONFIG_KSU_MANUAL_HOOK_AUTO_INPUT_HOOK=y
+        CONFIG_KSU_SUSFS=y
+        CONFIG_KSU_SUSFS_SUS_PATH=y
+        CONFIG_KSU_SUSFS_SUS_MOUNT=y
+        CONFIG_KSU_SUSFS_SUS_KSTAT=y
+        CONFIG_KSU_SUSFS_SPOOF_UNAME=y
+        CONFIG_KSU_SUSFS_ENABLE_LOG=y
+        CONFIG_KSU_SUSFS_HIDE_KSU_SUSFS_SYMBOLS=y
+        CONFIG_KSU_SUSFS_SPOOF_CMDLINE_OR_BOOTCONFIG=y
+        CONFIG_KSU_SUSFS_OPEN_REDIRECT=y
+        CONFIG_KSU_SUSFS_SUS_MAP=y
         CONFIG_KALLSYMS_ALL=y
         CONFIG_UH=n
         CONFIG_UH_RKP=n
@@ -103,9 +146,9 @@ jobs:
         CONFIG_KDP_NS=n
         CONFIG_KDP=n
         EOF
-        echo "✅ n950x_defconfig updated"
+        echo "✅ n950x_defconfig updated (NOTE: CONFIG_THREAD_INFO_IN_TASK intentionally absent)"
 
-    # ── 10. Build ──────────────────────────────────────────────────────────────
+    # ── 13. Build ──────────────────────────────────────────────────────────────
     - name: Build Kernel
       working-directory: kernel_source
       run: |
@@ -117,9 +160,15 @@ jobs:
         grep "CONFIG_KSU=y" .config \
           && echo "✅ CONFIG_KSU=y in final config" \
           || echo "⚠️  CONFIG_KSU not in final config"
+        grep "CONFIG_KSU_SUSFS=y" .config \
+          && echo "✅ CONFIG_KSU_SUSFS=y in final config" \
+          || echo "⚠️  CONFIG_KSU_SUSFS not in final config"
+        grep "CONFIG_THREAD_INFO_IN_TASK" .config \
+          && echo "❌ WARNING: THREAD_INFO_IN_TASK is set — this should NOT happen" \
+          || echo "✅ THREAD_INFO_IN_TASK correctly absent"
         make -j$(nproc) ARCH=arm64 CROSS_COMPILE=$CROSS_COMPILE 2>&1 | tee build.log || true
 
-    # ── 11. Grab Image ─────────────────────────────────────────────────────────
+    # ── 14. Grab Image ─────────────────────────────────────────────────────────
     - name: Grab Kernel Image
       if: always()
       id: package
@@ -151,14 +200,14 @@ jobs:
       if: always()
       uses: actions/upload-artifact@v4
       with:
-        name: Note8-ReSukiSU
+        name: Note8-ReSukiSU-SUSFS
         path: |
           ${{ steps.package.outputs.image }}
           kernel_source/build.log
         if-no-files-found: ignore
         compression-level: 0
 
-    # ── 12. Surface Build Errors ───────────────────────────────────────────────
+    # ── 15. Surface Build Errors ───────────────────────────────────────────────
     - name: Surface Build Errors
       if: always()
       run: |
@@ -166,14 +215,14 @@ jobs:
           echo "No build log found"
           exit 0
         fi
-        echo "=== KSU driver errors ==="
-        grep -n "kernelsu\|drivers/kernelsu" kernel_source/build.log \
-          | grep "error:" | head -30 || true
+        echo "=== SUSFS/KSU driver errors ==="
+        grep -n "susfs\|kernelsu\|drivers/kernelsu" kernel_source/build.log \
+          | grep "error:" | head -40 || true
         echo ""
         echo "=== All errors ==="
         ERRORS=$(grep -c "error:" kernel_source/build.log 2>/dev/null || echo 0)
         echo "$ERRORS error(s) found"
-        grep "error:" kernel_source/build.log | head -60 || true
+        grep "error:" kernel_source/build.log | head -80 || true
         echo ""
-        echo "=== First 10 warnings ==="
-        grep "warning:" kernel_source/build.log | head -10 || true
+        echo "=== First 15 warnings ==="
+        grep "warning:" kernel_source/build.log | head -15 || true
