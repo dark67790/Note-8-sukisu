@@ -351,8 +351,7 @@ fix('fs/namespace.c',
     'namespace.c hunk#1: susfs includes + externs')
 
 # ── fs/namespace.c — susfs_alloc_{un,non_un}share_ksu_vfsmnt function bodies ──
-# These were called by hunks#7/#8 but the patch's own definitions for them
-# were never landing on Samsung's tree — add them explicitly before alloc_vfsmnt.
+# (Samsung is CONFIG_SMP — must use mnt_pcp, not flat mnt_count/mnt_writers)
 _anchor = "static struct mount *alloc_vfsmnt(const char *name)"
 _funcs = (
     '#ifdef CONFIG_KSU_SUSFS_SUS_MOUNT\n'
@@ -371,8 +370,15 @@ _funcs = (
     '\t\t\tif (!mnt->mnt_devname)\n'
     '\t\t\t\tgoto out_free_cache;\n'
     '\t\t}\n'
+    '#ifdef CONFIG_SMP\n'
+    '\t\tmnt->mnt_pcp = alloc_percpu(struct mnt_pcp);\n'
+    '\t\tif (!mnt->mnt_pcp)\n'
+    '\t\t\tgoto out_free_devname;\n'
+    '\t\tthis_cpu_add(mnt->mnt_pcp->mnt_count, 1);\n'
+    '#else\n'
     '\t\tmnt->mnt_count = 1;\n'
     '\t\tmnt->mnt_writers = 0;\n'
+    '#endif\n'
     '\n'
     '\t\tINIT_HLIST_NODE(&mnt->mnt_hash);\n'
     '\t\tINIT_LIST_HEAD(&mnt->mnt_child);\n'
@@ -388,6 +394,10 @@ _funcs = (
     '\t}\n'
     '\treturn mnt;\n'
     '\n'
+    '#ifdef CONFIG_SMP\n'
+    'out_free_devname:\n'
+    '\tkfree_const(mnt->mnt_devname);\n'
+    '#endif\n'
     'out_free_cache:\n'
     '\tkmem_cache_free(mnt_cache, mnt);\n'
     '\treturn NULL;\n'
@@ -413,8 +423,15 @@ _funcs = (
     '\t\t\tif (!mnt->mnt_devname)\n'
     '\t\t\t\tgoto out_free_id;\n'
     '\t\t}\n'
+    '#ifdef CONFIG_SMP\n'
+    '\t\tmnt->mnt_pcp = alloc_percpu(struct mnt_pcp);\n'
+    '\t\tif (!mnt->mnt_pcp)\n'
+    '\t\t\tgoto out_free_devname;\n'
+    '\t\tthis_cpu_add(mnt->mnt_pcp->mnt_count, 1);\n'
+    '#else\n'
     '\t\tmnt->mnt_count = 1;\n'
     '\t\tmnt->mnt_writers = 0;\n'
+    '#endif\n'
     '\n'
     '\t\tINIT_HLIST_NODE(&mnt->mnt_hash);\n'
     '\t\tINIT_LIST_HEAD(&mnt->mnt_child);\n'
@@ -430,6 +447,10 @@ _funcs = (
     '\t}\n'
     '\treturn mnt;\n'
     '\n'
+    '#ifdef CONFIG_SMP\n'
+    'out_free_devname:\n'
+    '\tkfree_const(mnt->mnt_devname);\n'
+    '#endif\n'
     'out_free_id:\n'
     '\tmnt_free_id(mnt);\n'
     'out_free_cache:\n'
@@ -440,7 +461,7 @@ _funcs = (
     '\n'
 )
 fix('fs/namespace.c', _anchor, _funcs + _anchor,
-    'namespace.c: susfs_alloc_{un,non_un}share_ksu_vfsmnt function bodies')
+    'namespace.c: susfs_alloc_{un,non_un}share_ksu_vfsmnt function bodies (SMP-correct)')
 
 fix('fs/namespace.c',
     'static int mnt_alloc_group_id(struct mount *mnt)\n'
