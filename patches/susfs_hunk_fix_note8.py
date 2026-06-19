@@ -638,7 +638,6 @@ fix('fs/namespace.c',
     '\tfor (; mnt && mnt->mnt_parent && mnt != mnt->mnt_parent && '
     'mnt->mnt_id >= DEFAULT_KSU_MNT_ID; mnt = mnt->mnt_parent) { }\n'
     '\tmnt_id = mnt->mnt_id;\n'
-    '\tunlock_mount_hash();\n'
     '\treturn mnt_id;\n'
     '}\n'
     '\n'
@@ -787,6 +786,15 @@ fix('fs/proc/base.c',
 # fs/proc/cmdline.c
 # ═══════════════════════════════════════════════════════════════════════════════
 print("\n══ fs/proc/cmdline.c ════════════════════════════════════════════════════")
+
+fix('fs/proc/cmdline.c',
+    '#include <linux/slab.h>',
+    '#include <linux/slab.h>\n'
+    '#ifdef CONFIG_KSU_SUSFS_SPOOF_CMDLINE_OR_BOOTCONFIG\n'
+    '#include <linux/jump_label.h>\n'
+    '#endif',
+    'cmdline.c: jump_label.h include (static_branch_likely)')
+
 fix('fs/proc/cmdline.c',
     'static int cmdline_proc_show(struct seq_file *m, void *v)\n'
     '{',
@@ -1023,6 +1031,10 @@ fix('fs/stat.c',
     '}',
     '\tstat->blksize = i_blocksize(inode);\n'
     '\tstat->blocks = inode->i_blocks;\n'
+    '#ifdef CONFIG_KSU_SUSFS_SUS_KSTAT\n'
+    '\tsusfs_sus_kstat_spoof_generic_fillattr(inode, stat);\n'
+    '#endif\n'
+    '}',
     '#ifdef CONFIG_KSU_SUSFS_SUS_KSTAT\n'
     '\tsusfs_sus_kstat_spoof_generic_fillattr(inode, stat);\n'
     '#endif\n'
