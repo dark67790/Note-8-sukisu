@@ -36,7 +36,7 @@ def fix_regex(path, pattern, replacement, label, flags=re.DOTALL):
     if not re.search(pattern, s, flags):
         print(f"⚠️  {label}: pattern not found — already applied or mismatch")
         return False
-    result = re.sub(pattern, replacement, s, count=1, flags=flags)
+    result = re.sub(pattern, replacement, mcount=1, flags=flags)
     if result == s:
         print(f"↩️  {label}: already applied — SKIP")
         return True
@@ -349,6 +349,97 @@ fix('fs/namespace.c',
     '#define CL_COPY_MNT_NS BIT(25)\n'
     '#endif',
     'namespace.c hunk#1: susfs includes + externs')
+
+# ── fs/namespace.c — susfs_alloc_{un,non_un}share_ksu_vfsmnt function bodies ──
+# These are placed before alloc_vfsmnt to maintain correct ordering for later hunks.
+_anchor = "static struct mount *alloc_vfsmnt(const char *name)"
+_funcs = (
+    '#ifdef CONFIG_KSU_SUSFS_SUS_MOUNT\n'
+    '/* A copy of alloc_vfsmnt() but allocates the fake mnt_id for mounts\n'
+    ' * that are unshared by ksu process\n'
+    ' */\n'
+    'static struct mount *susfs_alloc_unshare_ksu_vfsmnt(const char *name, int old_mnt_id)\n'
+    '{\n'
+    '\tstruct mount *mnt = kmem_cache_zalloc(mnt_cache, GFP_KERNEL);\n'
+    '\n'
+    '\tif (mnt) {\n'
+    '\t\tmnt->mnt_id = old_mnt_id;\n'
+    '\n'
+    '\t\tif (name) {\n'
+    '\t\t\tmnt->mnt_devname = kstrdup_const(name, GFP_KERNEL);\n'
+    '\t\t\tif (!mnt->mnt_devname)\n'
+    '\t\t\t\tgoto out_free_cache;\n'
+    '\t\t}\n'
+    '\t\tmnt->mnt_count = 1;\n'
+    '\t\tmnt->mnt_writers = 0;\n'
+    '\n'
+    '\t\tINIT_HLIST_NODE(&mnt->mnt_hash);\n'
+    '\t\tINIT_LIST_HEAD(&mnt->mnt_child);\n'
+    '\t\tINIT_LIST_HEAD(&mnt->mnt_mounts);\n'
+    '\t\tINIT_LIST_HEAD(&mnt->mnt_list);\n'
+    '\t\tINIT_LIST_HEAD(&mnt->mnt_expire);\n'
+    '\t\tINIT_LIST_HEAD(&mnt->mnt_share);\n'
+    '\t\tINIT_LIST_HEAD(&mnt->mnt_slave_list);\n'
+    '\t\tINIT_LIST_HEAD(&mnt->mnt_slave);\n'
+    '\t\tINIT_HLIST_NODE(&mnt->mnt_mp_list);\n'
+    '\t\tINIT_LIST_HEAD(&mnt->mnt_umounting);\n'
+    '\t\tinit_fs_pin(&mnt->mnt_umount, drop_mountpoint);\n'
+    '\t}\n'
+    '\treturn mnt;\n'
+    '\n'
+    'out_free_cache:\n'
+    '\tkmem_cache_free(mnt_cache, mnt);\n'
+    '\treturn NULL;\n'
+    '}\n'
+    '\n'
+    '/* A copy of alloc_vfsmnt() but allocates the fake mnt_id for mount\n'
+    ' * that is mounted or single cloned by ksu process\n'
+    ' */\n'
+    'static struct mount *susfs_alloc_non_unshare_ksu_vfsmnt(const char *name)\n'
+    '{\n'
+    '\tstruct mount *mnt = kmem_cache_zalloc(mnt_cache, GFP_KERNEL);\n'
+    '\tint res;\n'
+    '\n'
+    '\tif (mnt) {\n'
+    '\t\tres = ida_simple_get(&mnt_id_ida, DEFAULT_KSU_MNT_ID, 0, GFP_KERNEL);\n'
+    '\t\tif (res < 0)\n'
+    '\t\t\tgoto out_free_cache;\n'
+    '\n'
+    '\t\tmnt->mnt_id = res;\n'
+    '\n'
+    '\t\tif (name) {\n'
+    '\t\t\tmnt->mnt_devname = kstrdup_const(name, GFP_KERNEL);\n'
+    '\t\t\tif (!mnt->mnt_devname)\n'
+    '\t\t\t\tgoto out_free_id;\n'
+    '\t\t}\n'
+    '\t\tmnt->mnt_count = 1;\n'
+    '\t\tmnt->mnt_writers = 0;\n'
+    '\n'
+    '\t\tINIT_HLIST_NODE(&mnt->mnt_hash);\n'
+    '\t\tINIT_LIST_HEAD(&mnt->mnt_child);\n'
+    '\t\tINIT_LIST_HEAD(&mnt->mnt_mounts);\n'
+    '\t\tINIT_LIST_HEAD(&mnt->mnt_list);\n'
+    '\t\tINIT_LIST_HEAD(&mnt->mnt_expire);\n'
+    '\t\tINIT_LIST_HEAD(&mnt->mnt_share);\n'
+    '\t\tINIT_LIST_HEAD(&mnt->mnt_slave_list);\n'
+    '\t\tINIT_LIST_HEAD(&mnt->mnt_slave);\n'
+    '\t\tINIT_HLIST_NODE(&mnt->mnt_mp_list);\n'
+    '\t\tINIT_LIST_HEAD(&mnt->mnt_umounting);\n'
+    '\t\tinit_fs_pin(&mnt->mnt_umount, drop_mountpoint);\n'
+    '\t}\n'
+    '\treturn mnt;\n'
+    '\n'
+    'out_free_id:\n'
+    '\tmnt_free_id(mnt);\n'
+    'out_free_cache:\n'
+    '\tkmem_cache_free(mnt_cache, mnt);\n'
+    '\treturn NULL;\n'
+    '}\n'
+    '#endif // #ifdef CONFIG_KSU_SUSFS_SUS_MOUNT\n'
+    '\n'
+)
+fix('fs/namespace.c', _anchor, _funcs + _anchor,
+    'namespace.c: susfs_alloc_{un,non_un}share_ksu_vfsmnt function bodies')
 
 fix('fs/namespace.c',
     'static int mnt_alloc_group_id(struct mount *mnt)\n'
