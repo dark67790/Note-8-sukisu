@@ -110,4 +110,21 @@ fix('kernel/reboot.c',
     '\tif (!ns_capable(pid_ns->user_ns, CAP_SYS_BOOT))',
     'reboot.c: hook')
 
+# ── kernel/sys.c ───────────────────────────────────────────────────────────
+fix('kernel/sys.c',
+    'SYSCALL_DEFINE3(setresuid, uid_t, ruid, uid_t, euid, uid_t, suid)',
+    '#ifdef CONFIG_KSU\n'
+    'extern int ksu_handle_setresuid(uid_t ruid, uid_t euid, uid_t suid);\n'
+    '#endif\n'
+    'SYSCALL_DEFINE3(setresuid, uid_t, ruid, uid_t, euid, uid_t, suid)',
+    'sys.c: ksu_handle_setresuid externs')
+
+fix('kernel/sys.c',
+    '\tkuid_t kruid, keuid, ksuid;',
+    '\tkuid_t kruid, keuid, ksuid;\n'
+    '#ifdef CONFIG_KSU\n'
+    '\t(void)ksu_handle_setresuid(ruid, euid, suid);\n'
+    '#endif',
+    'sys.c: ksu_handle_setresuid hook')
+
 print("\n✅ All ReSukiSU manual hooks applied")
