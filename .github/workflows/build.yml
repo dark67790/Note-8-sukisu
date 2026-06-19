@@ -10,7 +10,7 @@ on:
 jobs:
   build:
     name: SM-N950F · ReSukiSU · SUSFS · Note 8
-    runs-on: ubuntu-latest
+    runs-runs-on: ubuntu-latest
 
     steps:
     # ── 1. Checkout ────────────────────────────────────────────────────────────
@@ -103,14 +103,10 @@ jobs:
         patch -p1 --fuzz=0 < /tmp/susfs_4.9.patch || true
         echo "✅ SUSFS base patch applied (expected: many hunks fail — fixed by round 1/2 scripts below)"
 
-    # ── 11. SUSFS Hunk Fixups (round 1 + round 2) ─────────────────────────────
-    - name: Apply SUSFS Hunk Fixes (round 1)
+    # ── 11. SUSFS Hunk Fixups ─────────────────────────────────────────────────
+    - name: Apply SUSFS Hunk Fixes
       working-directory: kernel_source
       run: python3 ${{ env.PATCHES }}/susfs_hunk_fix_note8.py
-
-    - name: Apply SUSFS Hunk Fixes (round 2)
-      working-directory: kernel_source
-      run: python3 ${{ env.PATCHES }}/susfs_hunk_fix_note8_round2.py
 
     # ── 12. Kernel Config ──────────────────────────────────────────────────────
     - name: Set Kernel Config
