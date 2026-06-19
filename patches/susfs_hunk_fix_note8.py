@@ -197,7 +197,6 @@ fix('fs/namei.c',
     'namei.c hunk#14: walk_component ND_FLAGS_LOOKUP_LAST before lookup_slow')
 
 # Hunk #15: regex-based due to irregular whitespace in upstream source
-# (stray leading space before tabs on the "if (err)" line)
 fix_regex('fs/namei.c',
     r'(\t\terr = may_lookup\(nd\);\n[ \t]+if \(err\)\n\t\t\treturn err;\n)\n(\t\thash_len = hash_name\(name\);)',
     r'\1\n'
@@ -459,7 +458,6 @@ fix('fs/namespace.c',
     '\t\treturn ERR_PTR(-ENOMEM);',
     'namespace.c hunk#8: clone_mnt KSU domain alloc intercept')
 
-# Corrected (round2): real Samsung non-RKP mask is MNT_WRITE_HOLD|MNT_MARKED only
 fix('fs/namespace.c',
     '\tmnt->mnt.mnt_flags = old->mnt.mnt_flags & ~(MNT_WRITE_HOLD|MNT_MARKED);\n'
     '\t/* Don\'t allow unprivileged users to change mount flags */',
@@ -501,7 +499,6 @@ fix('fs/namespace.c',
     '\tspin_lock(&mnt_id_lock);',
     'namespace.c hunk#13: mnt_free_id skip KSU unshared mounts')
 
-# EOF helper functions (corrected: confirmed missing, real content added)
 fix('fs/namespace.c',
     'const struct proc_ns_operations mntns_operations = {\n'
     '\t.name\t\t= "mnt",\n'
@@ -611,7 +608,7 @@ fix('fs/open.c',
     'open.c hunk#1: do_sys_open OPEN_REDIRECT extern + vars')
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# fs/proc/base.c — corrected: real anchor is posix-timers.h, not cpufreq_times.h
+# fs/proc/base.c
 # ═══════════════════════════════════════════════════════════════════════════════
 print("\n══ fs/proc/base.c ═══════════════════════════════════════════════════════")
 fix('fs/proc/base.c',
@@ -696,7 +693,7 @@ fix('fs/proc/cmdline.c',
     'cmdline.c hunks#1+2: SPOOF_CMDLINE externs + check')
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# fs/proc/task_mmu.c — corrected anchors (real: sched/mm.h, no rollup_mode)
+# fs/proc/task_mmu.c
 # ═══════════════════════════════════════════════════════════════════════════════
 print("\n══ fs/proc/task_mmu.c ═══════════════════════════════════════════════════")
 fix('fs/proc/task_mmu.c',
@@ -747,9 +744,6 @@ fix('fs/proc/task_mmu.c',
     '#endif',
     'task_mmu.c hunks#3-5: SUS_MAP return + SUS_KSTAT spoof in show_map_vma')
 
-# Corrected (round2): Samsung's show_smap has no rollup_mode — single
-# unconditional seq_printf block + show_smap_vma_flags. Skip whole body
-# with goto labels when SUS_MAP-flagged.
 fix('fs/proc/task_mmu.c',
     '\tshow_map_vma(m, vma, is_pid);\n'
     '\n'
@@ -854,13 +848,34 @@ fix('fs/proc_namespace.c',
 # fs/readdir.c
 # ═══════════════════════════════════════════════════════════════════════════════
 print("\n══ fs/readdir.c ═════════════════════════════════════════════════════════")
-with open('fs/readdir.c', 'r') as f:
-    _rd = f.read()
-if 'buf.sb = f.file->f_inode->i_sb' in _rd and 'FUSE_SUPER_MAGIC' in _rd:
-    print("↩️  readdir.c hunks#5,7,11,12,16: buf.sb/path_err logic already present "
-          "(succeeded via original patch apply) — SKIP")
-else:
-    print("⚠️  readdir.c: buf.sb logic missing — check patch application manually")
+
+fix('fs/readdir.c',
+    '\tcontainer_of(ctx, struct getdents_callback, ctx);\n'
+    '\tunsigned long d_ino;\n',
+    '\tcontainer_of(ctx, struct getdents_callback, ctx);\n'
+    '\tunsigned long d_ino;\n'
+    '#ifdef CONFIG_KSU_SUSFS_SUS_PATH\n'
+    '\tstruct inode *inode;\n'
+    '#endif\n',
+    'readdir.c: filldir inode local var')
+
+fix('fs/readdir.c',
+    '\tstruct linux_dirent64 __user * current_dir;\n',
+    '\tstruct linux_dirent64 __user * current_dir;\n'
+    '#ifdef CONFIG_KSU_SUSFS_SUS_PATH\n'
+    '\tstruct super_block *sb;\n'
+    '#endif\n',
+    'readdir.c: getdents_callback64 sb member')
+
+fix('fs/readdir.c',
+    '\tcontainer_of(ctx, struct getdents_callback64, ctx);\n'
+    '\tint reclen = ALIGN(offsetof(struct linux_dirent64, d_name) + namlen + 1,\n',
+    '\tcontainer_of(ctx, struct getdents_callback64, ctx);\n'
+    '#ifdef CONFIG_KSU_SUSFS_SUS_PATH\n'
+    '\tstruct inode *inode;\n'
+    '#endif\n'
+    '\tint reclen = ALIGN(offsetof(struct linux_dirent64, d_name) + namlen + 1,\n',
+    'readdir.c: filldir64 inode local var')
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # fs/stat.c
@@ -890,7 +905,7 @@ fix('fs/stat.c',
 print("↩️  stat.c hunk#3: covered by hunk#2 (generic_fillattr spoof call) — SKIP")
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# kernel/sys.c — corrected: Samsung's real "int errno" direct copy_to_user variant
+# kernel/sys.c
 # ═══════════════════════════════════════════════════════════════════════════════
 print("\n══ kernel/sys.c ══════════════════════════════════════════════════════════")
 fix('kernel/sys.c',
@@ -975,7 +990,7 @@ fix('mm/memory.c',
     'memory.c hunk#3: __access_remote_vm SUS_MAP break')
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# fs/susfs.c — sanity check only (new file, added cleanly by patch)
+# fs/susfs.c
 # ═══════════════════════════════════════════════════════════════════════════════
 print("\n══ fs/susfs.c ═══════════════════════════════════════════════════════════")
 with open('fs/susfs.c', 'r') as f:
@@ -986,7 +1001,7 @@ else:
     print("⚠️  susfs.c: check susfs_is_current_ksu_domain declaration")
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# include/linux/susfs_def.h — bits.h → bitops.h for 4.4
+# include/linux/susfs_def.h
 # ═══════════════════════════════════════════════════════════════════════════════
 print("\n══ include/linux/susfs_def.h ════════════════════════════════════════════")
 fix('include/linux/susfs_def.h',
