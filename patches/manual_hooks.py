@@ -127,4 +127,49 @@ fix('kernel/sys.c',
     '#endif',
     'sys.c: ksu_handle_setresuid hook')
 
+# ── fs/read_write.c ──────────────────────────────────────────────────────
+fix('fs/read_write.c',
+    'SYSCALL_DEFINE3(read, unsigned int, fd, char __user *, buf, size_t, count)',
+    '#ifdef CONFIG_KSU\n'
+    'extern int ksu_handle_sys_read(unsigned int fd);\n'
+    '#endif\n'
+    'SYSCALL_DEFINE3(read, unsigned int, fd, char __user *, buf, size_t, count)',
+    'read_write.c: ksu_handle_sys_read externs')
+
+fix('fs/read_write.c',
+    'SYSCALL_DEFINE3(read, unsigned int, fd, char __user *, buf, size_t, count)\n'
+    '{\n'
+    '\tstruct fd f = fdget_pos(fd);\n'
+    '\tssize_t ret = -EBADF;\n'
+    '\n'
+    '\tif (f.file) {',
+    'SYSCALL_DEFINE3(read, unsigned int, fd, char __user *, buf, size_t, count)\n'
+    '{\n'
+    '\tstruct fd f = fdget_pos(fd);\n'
+    '\tssize_t ret = -EBADF;\n'
+    '\n'
+    '#ifdef CONFIG_KSU\n'
+    '\tksu_handle_sys_read(fd);\n'
+    '#endif\n'
+    '\tif (f.file) {',
+    'read_write.c: ksu_handle_sys_read hook')
+
+# ── drivers/input/input.c ────────────────────────────────────────────────
+fix('drivers/input/input.c',
+    'static void input_handle_event(struct input_dev *dev,',
+    '#ifdef CONFIG_KSU\n'
+    'extern int ksu_handle_input_handle_event(unsigned int *type, unsigned int *code, int *value);\n'
+    '#endif\n'
+    'static void input_handle_event(struct input_dev *dev,',
+    'input.c: ksu_handle_input_handle_event externs')
+
+fix('drivers/input/input.c',
+    'disposition = input_get_disposition(dev, type, code, &value);',
+    'disposition = input_get_disposition(dev, type, code, &value);\n'
+    '\n'
+    '#ifdef CONFIG_KSU\n'
+    '\tksu_handle_input_handle_event(&type, &code, &value);\n'
+    '#endif',
+    'input.c: ksu_handle_input_handle_event hook')
+
 print("\n✅ All ReSukiSU manual hooks applied")
