@@ -67,8 +67,6 @@ fix('fs/stat.c',
     'int vfs_fstatat(int dfd, const char __user *filename, struct kstat *stat,',
     '#ifdef CONFIG_KSU\n'
     'extern int ksu_handle_stat(int *dfd, const char __user **filename_user, int *flags);\n'
-    'extern void ksu_handle_newfstat_ret(unsigned int *fd, struct stat __user **statbuf_ptr);\n'
-    'extern void ksu_handle_fstat64_ret(unsigned long *fd, struct stat64 __user **statbuf_ptr);\n'
     '#endif\n'
     'int vfs_fstatat(int dfd, const char __user *filename, struct kstat *stat,',
     'stat.c: externs')
@@ -81,16 +79,6 @@ fix('fs/stat.c',
     '#endif\n\n'
     '\tif ((flag & ~(AT_SYMLINK_NOFOLLOW',
     'stat.c: ksu_handle_stat hook')
-
-fix_regex('fs/stat.c',
-    r'(SYSCALL_DEFINE2\s*\(\s*newfstat\s*,.*?cp_new_stat\s*\(\s*&stat\s*,\s*statbuf\s*\);)',
-    r'\1\n#ifdef CONFIG_KSU\n\tksu_handle_newfstat_ret(&fd, &statbuf);\n#endif',
-    'stat.c: ksu_handle_newfstat_ret hook')
-
-fix_regex('fs/stat.c',
-    r'(SYSCALL_DEFINE2\s*\(\s*fstat64\s*,.*?cp_new_stat64\s*\(\s*&stat\s*,\s*statbuf\s*\);)',
-    r'\1\n#ifdef CONFIG_KSU\n\tksu_handle_fstat64_ret(&fd, &statbuf);\n#endif',
-    'stat.c: ksu_handle_fstat64_ret hook')
 
 # ── kernel/reboot.c ────────────────────────────────────────────────────────
 fix('kernel/reboot.c',
