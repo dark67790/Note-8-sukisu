@@ -36,7 +36,7 @@ def fix_regex(path, pattern, replacement, label, flags=re.DOTALL):
     if not re.search(pattern, s, flags):
         print(f"⚠️  {label}: pattern not found — already applied or mismatch")
         return False
-    result = re.sub(pattern, replacement, mcount=1, flags=flags)
+    result = re.sub(pattern, replacement, s, count=1, flags=flags)
     if result == s:
         print(f"↩️  {label}: already applied — SKIP")
         return True
@@ -351,7 +351,8 @@ fix('fs/namespace.c',
     'namespace.c hunk#1: susfs includes + externs')
 
 # ── fs/namespace.c — susfs_alloc_{un,non_un}share_ksu_vfsmnt function bodies ──
-# These are placed before alloc_vfsmnt to maintain correct ordering for later hunks.
+# These were called by hunks#7/#8 but the patch's own definitions for them
+# were never landing on Samsung's tree — add them explicitly before alloc_vfsmnt.
 _anchor = "static struct mount *alloc_vfsmnt(const char *name)"
 _funcs = (
     '#ifdef CONFIG_KSU_SUSFS_SUS_MOUNT\n'
