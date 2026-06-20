@@ -1,4 +1,3 @@
-
 name: Build Note8 Kernel (ReSukiSU + SUSFS)
 
 permissions:
@@ -57,7 +56,7 @@ jobs:
       run: |
         curl -LSs \
           "https://raw.githubusercontent.com/ReSukiSU/ReSukiSU/main/kernel/setup.sh" \
-          | bash -s main || true
+          | bash -s d80dbca8a01a428cd13aa126ced2ff02c546813b || true
         FAIL=0
         grep -q "config KSU" drivers/kernelsu/Kconfig \
           && echo "✅ Kconfig has KSU" || { echo "❌ Kconfig missing KSU"; FAIL=1; }
