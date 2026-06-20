@@ -1,3 +1,4 @@
+
 name: Build Note8 Kernel (ReSukiSU + SUSFS)
 
 permissions:
@@ -89,7 +90,12 @@ jobs:
       working-directory: kernel_source
       run: python3 ${{ env.PATCHES }}/sukisu_compat_fix.py
 
-    # ── 9. Apply Manual KSU Hooks ─────────────────────────────────────────────
+    # ── 9. Apply Manual KSU Hooks (only the ones still required by ────────────
+    #       inline_hook_check.mk's literal string checks: execveat, faccessat,
+    #       stat, reboot, sys_read, input_handle_event, setresuid. NOTE: these
+    #       are presence-only checks unrelated to CONFIG_KSU_MANUAL_HOOK_AUTO_*
+    #       — those auto-hook flags must NOT be set in defconfig (see step 12),
+    #       since they silently neuter the real hook bodies in SUSFS mode.
     - name: Apply Manual KSU Hooks
       working-directory: kernel_source
       run: python3 ${{ env.PATCHES }}/manual_hooks.py
@@ -101,23 +107,29 @@ jobs:
         curl -LSs -o /tmp/susfs_4.9.patch \
           "https://raw.githubusercontent.com/JackA1ltman/NonGKI_Kernel_Build_2nd/mainline/Patches/Patch/susfs_patch_to_4.9.patch"
         patch -p1 --fuzz=0 < /tmp/susfs_4.9.patch || true
-        echo "✅ SUSFS base patch applied (expected: many hunks fail — fixed by round 1/2 scripts below)"
+        echo "✅ SUSFS base patch applied (expected: many hunks fail — fixed by hunk-fix script below)"
 
-    # ── 11. SUSFS Hunk Fixups ─────────────────────────────────────────────────
+    # ── 11. SUSFS Hunk Fixups ──────────────────────────────────────────────────
     - name: Apply SUSFS Hunk Fixes
       working-directory: kernel_source
       run: python3 ${{ env.PATCHES }}/susfs_hunk_fix_note8.py
 
     # ── 12. Kernel Config ──────────────────────────────────────────────────────
+    # CONFIG_KSU_MANUAL_HOOK is intentionally OMITTED: it's in the same
+    # Kconfig `choice` block as CONFIG_KSU_SUSFS (KernelSU Hooking Method),
+    # so selecting SUSFS silently unselects MANUAL_HOOK regardless of what
+    # we write here. The three CONFIG_KSU_MANUAL_HOOK_AUTO_* flags must also
+    # be OMITTED — they gate dummy/no-op branches inside ksu_handle_setresuid,
+    # ksu_handle_sys_read, and ksu_handle_input_handle_event that short-circuit
+    # the real umount/grant logic when set, even though MANUAL_HOOK itself
+    # isn't active. Setting them broke new root grants and mount-based
+    # SUSFS hiding while leaving pre-existing grants (made under the old
+    # RekiSU-only kernel) untouched.
     - name: Set Kernel Config
       working-directory: kernel_source
       run: |
         cat >> arch/arm64/configs/n950x_defconfig << 'EOF'
         CONFIG_KSU=y
-        CONFIG_KSU_MANUAL_HOOK=y
-        CONFIG_KSU_MANUAL_HOOK_AUTO_SETUID_HOOK=y
-        CONFIG_KSU_MANUAL_HOOK_AUTO_INITRC_HOOK=y
-        CONFIG_KSU_MANUAL_HOOK_AUTO_INPUT_HOOK=y
         CONFIG_KSU_SUSFS=y
         CONFIG_KSU_SUSFS_SUS_PATH=y
         CONFIG_KSU_SUSFS_SUS_MOUNT=y
@@ -142,7 +154,8 @@ jobs:
         CONFIG_KDP_NS=n
         CONFIG_KDP=n
         EOF
-        echo "✅ n950x_defconfig updated (NOTE: CONFIG_THREAD_INFO_IN_TASK intentionally absent)"
+        echo "✅ n950x_defconfig updated (NOTE: CONFIG_THREAD_INFO_IN_TASK and"
+        echo "    CONFIG_KSU_MANUAL_HOOK* intentionally absent)"
 
     # ── 13. Build ──────────────────────────────────────────────────────────────
     - name: Build Kernel
@@ -159,6 +172,9 @@ jobs:
         grep "CONFIG_KSU_SUSFS=y" .config \
           && echo "✅ CONFIG_KSU_SUSFS=y in final config" \
           || echo "⚠️  CONFIG_KSU_SUSFS not in final config"
+        grep "CONFIG_KSU_MANUAL_HOOK" .config \
+          && echo "❌ WARNING: CONFIG_KSU_MANUAL_HOOK* present — this should NOT happen" \
+          || echo "✅ CONFIG_KSU_MANUAL_HOOK* correctly absent"
         grep "CONFIG_THREAD_INFO_IN_TASK" .config \
           && echo "❌ WARNING: THREAD_INFO_IN_TASK is set — this should NOT happen" \
           || echo "✅ THREAD_INFO_IN_TASK correctly absent"
