@@ -129,6 +129,10 @@ jobs:
     - name: Set Kernel Config
       working-directory: kernel_source
       run: |
+        sed -i 's/int selinux_enforcing = 0;/int selinux_enforcing = 1;/g' \
+          security/selinux/hooks.c
+        echo "✅ selinux enforcing patched"
+
         cat >> arch/arm64/configs/n950x_defconfig << 'EOF'
         CONFIG_KSU=y
         CONFIG_KSU_SUSFS=y
