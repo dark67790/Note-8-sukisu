@@ -1136,9 +1136,9 @@ if 'extern bool susfs_is_current_ksu_domain(void);' in _sc:
 else:
     print("⚠️  susfs.c: check susfs_is_current_ksu_domain declaration")
 
-fix('fs/susfs.c',
-    'static void susfs_run_sus_path_loop(void) {',
-    'void susfs_run_sus_path_loop(void) {',
+fix_regex('fs/susfs.c',
+    r'static void susfs_run_sus_path_loop\(void\) \{',
+    r'void susfs_run_sus_path_loop(void) {',
     'susfs.c: make susfs_run_sus_path_loop non-static (called externally by ReSukiSU rules.c at this commit)')
 
 # ═══════════════════════════════════════════════════════════════════════════════
