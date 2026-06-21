@@ -80,9 +80,11 @@ jobs:
     - name: Patch Kconfig (remove THREAD_INFO_IN_TASK dependency)
       working-directory: kernel_source
       run: |
-        sed -i 's/depends on THREAD_INFO_IN_TASK && 64BIT/depends on 64BIT/' \
+        sed -i \
+          -e 's/depends on THREAD_INFO_IN_TASK && 64BIT/depends on 64BIT/' \
+          -e '/depends on THREAD_INFO_IN_TASK$/d' \
           drivers/kernelsu/Kconfig
-        grep -A1 "config KSU_SUSFS$" drivers/kernelsu/Kconfig
+        grep -B2 -A1 "KernelSU addon - SUSFS\|config KSU_SUSFS$" drivers/kernelsu/Kconfig
 
     # ── 8. Apply ReSukiSU 4.4 Compat Fixes ────────────────────────────────────
     - name: Apply ReSukiSU 4.4 Compat Fixes
