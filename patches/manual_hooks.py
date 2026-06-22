@@ -119,7 +119,7 @@ fix('kernel/sys.c',
 fix('fs/read_write.c',
     'SYSCALL_DEFINE3(read, unsigned int, fd, char __user *, buf, size_t, count)',
     '#ifdef CONFIG_KSU\n'
-    'extern int ksu_handle_sys_read(unsigned int fd);\n'
+    'extern int ksu_handle_sys_read(unsigned int fd, char __user **buf_ptr, size_t *count_ptr);\n'
     '#endif\n'
     'SYSCALL_DEFINE3(read, unsigned int, fd, char __user *, buf, size_t, count)',
     'read_write.c: ksu_handle_sys_read externs')
@@ -137,7 +137,7 @@ fix('fs/read_write.c',
     '\tssize_t ret = -EBADF;\n'
     '\n'
     '#ifdef CONFIG_KSU\n'
-    '\tksu_handle_sys_read(fd);\n'
+    '\tksu_handle_sys_read(fd, &buf, &count);\n'
     '#endif\n'
     '\tif (f.file) {',
     'read_write.c: ksu_handle_sys_read hook')
