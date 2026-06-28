@@ -95,13 +95,18 @@ jobs:
     #       inline_hook_check.mk's literal string checks: execveat, faccessat,
     #       stat, reboot, sys_read, input_handle_event, setresuid. NOTE: these
     #       are presence-only checks unrelated to CONFIG_KSU_MANUAL_HOOK_AUTO_*
-    #       — those auto-hook flags must NOT be set in defconfig (see step 12),
+    #       — those auto-hook flags must NOT be set in defconfig (see step 13),
     #       since they silently neuter the real hook bodies in SUSFS mode.
     - name: Apply Manual KSU Hooks
       working-directory: kernel_source
       run: python3 ${{ env.PATCHES }}/manual_hooks.py
 
-    # ── 10. Download and apply SUSFS v2.1.0 patch (4.9-targeted, fuzz=0) ──────
+    # ── 10. Apply Note 8 KSU Domain Fix ────────────────────────────────────────
+    - name: Apply Note 8 KSU Domain Fix
+      working-directory: kernel_source
+      run: python3 ${{ env.PATCHES }}/note8_ksu_domain_fix.py
+
+    # ── 11. Download and apply SUSFS v2.1.0 patch (4.9-targeted, fuzz=0) ──────
     - name: Apply SUSFS Patch
       working-directory: kernel_source
       run: |
@@ -110,12 +115,12 @@ jobs:
         patch -p1 --fuzz=0 < /tmp/susfs_4.9.patch || true
         echo "✅ SUSFS base patch applied (expected: many hunks fail — fixed by hunk-fix script below)"
 
-    # ── 11. SUSFS Hunk Fixups ──────────────────────────────────────────────────
+    # ── 12. SUSFS Hunk Fixups ──────────────────────────────────────────────────
     - name: Apply SUSFS Hunk Fixes
       working-directory: kernel_source
       run: python3 ${{ env.PATCHES }}/susfs_hunk_fix_note8.py
 
-    # ── 12. Kernel Config ──────────────────────────────────────────────────────
+    # ── 13. Kernel Config ──────────────────────────────────────────────────────
     # CONFIG_KSU_MANUAL_HOOK is intentionally OMITTED: it's in the same
     # Kconfig `choice` block as CONFIG_KSU_SUSFS (KernelSU Hooking Method),
     # so selecting SUSFS silently unselects MANUAL_HOOK regardless of what
@@ -162,7 +167,7 @@ jobs:
         echo "✅ n950x_defconfig updated (NOTE: CONFIG_THREAD_INFO_IN_TASK and"
         echo "    CONFIG_KSU_MANUAL_HOOK* intentionally absent)"
 
-    # ── 13. Build ──────────────────────────────────────────────────────────────
+    # ── 14. Build ──────────────────────────────────────────────────────────────
     - name: Build Kernel
       working-directory: kernel_source
       run: |
@@ -185,7 +190,7 @@ jobs:
           || echo "✅ THREAD_INFO_IN_TASK correctly absent"
         make -j$(nproc) ARCH=arm64 CROSS_COMPILE=$CROSS_COMPILE 2>&1 | tee build.log || true
 
-    # ── 14. Grab Image ─────────────────────────────────────────────────────────
+    # ── 15. Grab Image ─────────────────────────────────────────────────────────
     - name: Grab Kernel Image
       if: always()
       id: package
@@ -224,7 +229,7 @@ jobs:
         if-no-files-found: ignore
         compression-level: 0
 
-    # ── 15. Surface Build Errors ───────────────────────────────────────────────
+    # ── 16. Surface Build Errors ───────────────────────────────────────────────
     - name: Surface Build Errors
       if: always()
       run: |
